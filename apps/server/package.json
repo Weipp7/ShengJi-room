@@ -1,0 +1,26 @@
+{
+  "name": "@shengji/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "esbuild src/index.ts --bundle --platform=node --format=esm --outfile=dist/index.js --external:express --external:socket.io",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@shengji/shared": "workspace:*",
+    "@shengji/game": "workspace:*",
+    "@shengji/bot": "workspace:*",
+    "express": "^4.19.0",
+    "socket.io": "^4.7.0"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^22.0.0",
+    "esbuild": "^0.23.0",
+    "socket.io-client": "^4.7.0",
+    "tsx": "^4.16.0"
+  }
+}

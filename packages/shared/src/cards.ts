@@ -1,0 +1,25 @@
+export type Suit = 'S' | 'H' | 'D' | 'C';
+
+// 11=J 12=Q 13=K 14=A
+export type Rank = 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14;
+
+export type SuitCard = { id: string; kind: 'suit'; suit: Suit; rank: Rank };
+export type JokerCard = { id: string; kind: 'joker'; joker: 'small' | 'big' };
+export type Card = SuitCard | JokerCard;
+
+export type TrumpContext = { trumpSuit: Suit | null; level: Rank };
+
+export type EffectiveSuit = Suit | 'trump';
+
+export type ComboType = 'single' | 'pair' | 'tractor';
+
+export type Combo = {
+  type: ComboType;
+  cards: Card[];
+  suit: EffectiveSuit;
+  strength: number;
+};
+
+export type BidKind = 'suit-single' | 'suit-pair' | 'small-joker-pair' | 'big-joker-pair';
+
+export type Bid = { seat: number; kind: BidKind; suit: Suit | null; cards: Card[] };

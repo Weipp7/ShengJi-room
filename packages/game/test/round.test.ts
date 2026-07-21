@@ -1,0 +1,160 @@
+import { describe, it, expect } from 'vitest';
+import type { RoundState, StepResult } from '../src/round';
+import { createRound, applyReveal, applyPass, applyBury, applyPlay } from '../src/round';
+import { validateLead, validateFollow } from '../src/follow';
+import { mulberry32 } from './helpers';
+
+function expectOk(r: StepResult): RoundState {
+  if (!r.ok) throw new Error(`step failed: ${r.error.code}`);
+  return r.state;
+}
+
+// 遍历 turnSeat 手牌，返回第一张可合法打出的单张 id
+function pickAnyLegalSingle(s: RoundState): string {
+  const hand = s.hands[s.turnSeat];
+  const lead = s.currentTrick.length > 0 ? s.currentTrick[0].combo : null;
+  for (const card of hand) {
+    const res =
+      lead === null
+        ? validateLead([card], hand, s.trump)
+        : validateFollow(lead, [card], hand, s.trump);
+    if (res.ok) return card.id;
+  }
+  throw new Error('no legal single found');
+}
+
+// 优先出对子，其次单张，返回第一组合法出牌的 id 列表
+function pickAnyLegalPlay(s: RoundState): string[] {
+  const hand = s.hands[s.turnSeat];
+  const lead = s.currentTrick.length > 0 ? s.currentTrick[0].combo : null;
+  const check = (cards: typeof hand) =>
+    lead === null ? validateLead(cards, hand, s.trump) : validateFollow(lead, cards, hand, s.trump);
+  const wanted = lead === null ? 2 : lead.cards.length;
+  if (wanted === 1) {
+    return [pickAnyLegalSingle(s)];
+  }
+  if (wanted === 2) {
+    for (let i = 0; i < hand.length; i++) {
+      for (let j = i + 1; j < hand.length; j++) {
+        if (check([hand[i], hand[j]]).ok) return [hand[i].id, hand[j].id];
+      }
+    }
+  }
+  if (lead === null) {
+    return [pickAnyLegalSingle(s)];
+  }
+  throw new Error('no legal play found');
+}
+
+function cardCount(s: RoundState): number {
+  return (
+    s.hands.reduce((n, h) => n + h.length, 0) +
+    s.kitty.length +
+    s.currentTrick.reduce((n, p) => n + p.cards.length, 0)
+  );
+}
+
+describe('round state machine', () => {
+  it('full round with scripted actions reaches scoring', () => {
+    let s = createRound({ plannedDealerSeat: 0, teamLevels: [2, 2], rng: mulberry32(7) });
+    expect(s.phase).toBe('bidding');
+    // 全员 pass → 无主局，庄=0，进入 burying
+    for (const seat of [0, 1, 2, 3]) s = expectOk(applyPass(s, seat));
+    expect(s.phase).toBe('burying');
+    expect(s.trump.trumpSuit).toBeNull();
+    expect(s.dealerSeat).toBe(0);
+    expect(s.hands[0]).toHaveLength(33);
+    // 庄家埋 8 张
+    s = expectOk(
+      applyBury(s, 0, s.hands[0].slice(0, 8).map((card) => card.id)),
+    );
+    expect(s.phase).toBe('playing');
+    expect(s.hands[0]).toHaveLength(25);
+    expect(s.kitty).toHaveLength(8);
+    expect(s.turnSeat).toBe(0);
+    // 单张打满 25 墩
+    while (s.phase === 'playing') {
+      s = expectOk(applyPlay(s, s.turnSeat, [pickAnyLegalSingle(s)]));
+    }
+    expect(s.phase).toBe('scoring');
+    expect(s.tricksPlayed).toBe(25);
+    expect(s.result).not.toBeNull();
+    expect(s.result!.defenderPoints).toBeGreaterThanOrEqual(0);
+    expect(s.hands.every((h) => h.length === 0)).toBe(true);
+  });
+
+  it('round ends when hands are empty even with multi-card plays', () => {
+    let s = createRound({ plannedDealerSeat: 0, teamLevels: [2, 2], rng: mulberry32(99) });
+    for (const seat of [0, 1, 2, 3]) s = expectOk(applyPass(s, seat));
+    s = expectOk(
+      applyBury(s, 0, s.hands[0].slice(0, 8).map((card) => card.id)),
+    );
+    // 领牌尽量出对子 → 手牌会早于 25 墩打空
+    let guard = 0;
+    while (s.phase === 'playing' && guard++ < 400) {
+      s = expectOk(applyPlay(s, s.turnSeat, pickAnyLegalPlay(s)));
+    }
+    expect(s.phase).toBe('scoring');
+    expect(s.hands.every((h) => h.length === 0)).toBe(true);
+    expect(s.result).not.toBeNull();
+  });
+
+  it('reveal makes revealer the dealer and sets trump', () => {
+    let s = createRound({ plannedDealerSeat: 0, teamLevels: [2, 2], rng: mulberry32(11) });
+    // 沿叫主轮次找到第一个持有级牌的座位并亮主
+    let revealed = false;
+    for (let i = 0; i < 4 && !revealed; i++) {
+      const seat = s.biddingTurn;
+      const levelCard = s.hands[seat].find(
+        (card) => card.kind === 'suit' && card.rank === s.trump.level,
+      );
+      if (levelCard) {
+        s = expectOk(applyReveal(s, seat, [levelCard.id]));
+        expect(s.dealerSeat).toBe(seat);
+        expect(s.currentBid).not.toBeNull();
+        expect(s.trump.trumpSuit).toBe(levelCard.kind === 'suit' ? levelCard.suit : null);
+        revealed = true;
+      } else {
+        s = expectOk(applyPass(s, seat));
+      }
+    }
+    expect(revealed).toBe(true);
+    // 其余三家过 → 进入 burying，庄家即亮主者
+    const dealer = s.dealerSeat;
+    while (s.phase === 'bidding') s = expectOk(applyPass(s, s.biddingTurn));
+    expect(s.phase).toBe('burying');
+    expect(s.dealerSeat).toBe(dealer);
+  });
+
+  it('wrong turn / wrong phase / bad bury count rejected', () => {
+    let s = createRound({ plannedDealerSeat: 0, teamLevels: [2, 2], rng: mulberry32(3) });
+    const wrongSeat = (s.biddingTurn + 1) % 4;
+    expect(applyPass(s, wrongSeat)).toMatchObject({ ok: false, error: { code: 'wrong-turn' } });
+    expect(applyBury(s, 0, [])).toMatchObject({ ok: false, error: { code: 'wrong-phase' } });
+    for (const seat of [0, 1, 2, 3]) s = expectOk(applyPass(s, seat));
+    expect(
+      applyBury(s, 0, s.hands[0].slice(0, 7).map((card) => card.id)),
+    ).toMatchObject({ ok: false, error: { code: 'bad-bury-count' } });
+    expect(
+      applyBury(s, 1, s.hands[1].slice(0, 8).map((card) => card.id)),
+    ).toMatchObject({ ok: false, error: { code: 'not-dealer' } });
+  });
+
+  it('all cards conserved: hands+kitty+trick = 108 minus completed tricks', () => {
+    let s = createRound({ plannedDealerSeat: 1, teamLevels: [5, 3], rng: mulberry32(42) });
+    expect(cardCount(s)).toBe(108);
+    for (let i = 0; i < 4; i++) s = expectOk(applyPass(s, s.biddingTurn));
+    expect(cardCount(s)).toBe(108); // 底牌并入庄家手
+    s = expectOk(
+      applyBury(s, s.dealerSeat, s.hands[s.dealerSeat].slice(0, 8).map((card) => card.id)),
+    );
+    let played = 0;
+    while (s.phase === 'playing') {
+      s = expectOk(applyPlay(s, s.turnSeat, [pickAnyLegalSingle(s)]));
+      played += 1;
+      const completed = s.tricksPlayed * 1 * 4; // 每墩单张 4 张
+      expect(cardCount(s)).toBe(108 - completed);
+    }
+    expect(played).toBe(100);
+  });
+});

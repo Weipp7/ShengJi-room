@@ -1,0 +1,76 @@
+import { countPoints } from '@shengji/game';
+import { decideBid, decideBury, decidePlay } from '@shengji/bot';
+import type { Room } from './rooms';
+import { handleAction, type GameAction } from './gameFlow';
+
+// 每房间至多一个待触发的机器人定时器，避免重复调度
+const pending = new Map<string, NodeJS.Timeout>();
+
+export function cancelBots(roomCode: string): void {
+  const timer = pending.get(roomCode);
+  if (timer) clearTimeout(timer);
+  pending.delete(roomCode);
+}
+
+// 当前需要行动的座位；scoring 阶段等真人 round:next
+function actingSeat(room: Room): number | null {
+  const round = room.round;
+  if (!round) return null;
+  if (round.phase === 'bidding') return round.biddingTurn;
+  if (round.phase === 'burying') return round.dealerSeat;
+  if (round.phase === 'playing') return round.turnSeat;
+  return null;
+}
+
+function botAction(room: Room, seat: number): GameAction {
+  const round = room.round!;
+  if (round.phase === 'bidding') {
+    const cardIds = decideBid({
+      hand: round.hands[seat],
+      level: round.level,
+      currentBid: round.currentBid,
+      seat,
+    });
+    return cardIds ? { type: 'reveal', cardIds } : { type: 'pass' };
+  }
+  if (round.phase === 'burying') {
+    return { type: 'bury', cardIds: decideBury(round.hands[seat], round.trump) };
+  }
+  const leadCombo = round.currentTrick.length > 0 ? round.currentTrick[0].combo : null;
+  return {
+    type: 'play',
+    cardIds: decidePlay({
+      hand: round.hands[seat],
+      trump: round.trump,
+      leadCombo,
+      currentTrick: round.currentTrick,
+      seat,
+      trickPointsSoFar: countPoints(round.currentTrick.flatMap((p) => p.cards)),
+    }),
+  };
+}
+
+// 轮到机器人时延迟行动 → 广播 → 递归调度下一手
+export function scheduleBots(
+  room: Room,
+  broadcast: () => void,
+  delayMs: () => number = () => 600 + Math.random() * 600,
+): void {
+  if (pending.has(room.code)) return;
+  const seat = actingSeat(room);
+  if (seat === null || room.seats[seat].bot === null) return;
+  const timer = setTimeout(() => {
+    pending.delete(room.code);
+    // 定时器触发时重新校验：状态可能已被真人操作/换局改变
+    const nowSeat = actingSeat(room);
+    if (nowSeat === null || room.seats[nowSeat].bot === null) return;
+    const result = handleAction(room, nowSeat, botAction(room, nowSeat));
+    if (!result.ok) {
+      console.error(`bot action failed in room ${room.code}: ${result.error.code}`);
+      return;
+    }
+    broadcast();
+    scheduleBots(room, broadcast, delayMs);
+  }, delayMs());
+  pending.set(room.code, timer);
+}
