@@ -22,6 +22,7 @@ export const S2C = {
   GameError: 'game:error',
   ChatMessage: 'chat:message',
   ConnectionStatus: 'connection:status',
+  RoomEnded: 'room:ended',
 } as const;
 
 export type RoomCreatePayload = {

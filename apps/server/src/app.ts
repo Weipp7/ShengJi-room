@@ -2,18 +2,24 @@ import http from 'node:http';
 import express from 'express';
 import { Server, type Socket } from 'socket.io';
 import type {
+  BidRevealPayload,
   BotAddPayload,
   BotRemovePayload,
+  ChatSendPayload,
+  KittyBuryPayload,
   RoomCreatePayload,
   RoomJoinPayload,
   RoomListItem,
   RoomStateView,
   SeatTakePayload,
+  TrickPlayPayload,
 } from '@shengji/shared';
 import { C2S, S2C } from '@shengji/shared';
-import { createRound, sortHand } from '@shengji/game';
+import { sortHand } from '@shengji/game';
 import { loadConfig, type ServerConfig } from './config';
 import { RoomManager, type Room } from './rooms';
+import { advanceToNextRound, handleAction, startGame, type GameAction } from './gameFlow';
+import { cancelBots, scheduleBots } from './botRunner';
 
 // 按玩家投影房间状态：只下发本人手牌；scoring 阶段才有 kittyCards（在 result 内）
 export function projectRoomState(room: Room, playerId: string): RoomStateView {
@@ -56,7 +62,11 @@ export type AppContext = {
   broadcastRoom: (room: Room) => void;
 };
 
-export function createApp(config: ServerConfig = loadConfig()): AppContext {
+export type AppOptions = {
+  botDelayMs?: () => number;
+};
+
+export function createApp(config: ServerConfig = loadConfig(), opts: AppOptions = {}): AppContext {
   const app = express();
   app.get('/healthz', (_req, res) => {
     res.json({ ok: true });
@@ -91,6 +101,24 @@ export function createApp(config: ServerConfig = loadConfig()): AppContext {
     const currentRoom = (): Room | null => {
       const code = socket.data.roomCode as string | undefined;
       return code ? (manager.rooms.get(code) ?? null) : null;
+    };
+
+    const runBots = (room: Room): void => {
+      scheduleBots(room, () => broadcastRoom(room), opts.botDelayMs);
+    };
+
+    // 入座玩家的对局动作：校验坐席 → 状态机 → 广播 + 机器人调度
+    const act = (type: GameAction['type'], cardIds?: string[]): void => {
+      const room = currentRoom();
+      const playerId = socket.data.playerId as string | undefined;
+      if (!room || !playerId) return sendError('not-in-room', 'join a room first');
+      const seat = room.seats.findIndex((s) => s.player?.playerId === playerId);
+      if (seat < 0) return sendError('not-seated', 'take a seat first');
+      const result = handleAction(room, seat, { type, cardIds });
+      if (!result.ok) return sendError(result.error.code, result.error.message);
+      manager.touch(room);
+      broadcastRoom(room);
+      runBots(room);
     };
 
     // 绑定 socket 与玩家/房间，并同步 socketId
@@ -188,17 +216,60 @@ export function createApp(config: ServerConfig = loadConfig()): AppContext {
       const playerId = socket.data.playerId as string | undefined;
       if (!room || !playerId) return sendError('not-in-room', 'join a room first');
       if (playerId !== room.hostPlayerId) return sendError('not-host', 'only host can start');
-      if (room.phase !== 'waiting') return sendError('wrong-phase', 'game already started');
-      const filled = room.seats.every((s) => s.player !== null || s.bot !== null);
-      if (!filled) return sendError('seats-not-full', 'all 4 seats must be filled');
-      room.round = createRound({
-        plannedDealerSeat: room.plannedDealerSeat,
-        teamLevels: room.teamLevels,
-        rng: Math.random,
-      });
+      const res = startGame(room);
+      if (!res.ok) return sendError(res.code ?? 'start-error', 'cannot start game');
       manager.touch(room);
       broadcastRoom(room);
       io.to(room.code).emit('game:started', {});
+      runBots(room);
+    });
+
+    socket.on(C2S.BidReveal, (payload: BidRevealPayload) => act('reveal', payload?.cardIds ?? []));
+    socket.on(C2S.BidPass, () => act('pass'));
+    socket.on(C2S.KittyBury, (payload: KittyBuryPayload) => act('bury', payload?.cardIds ?? []));
+    socket.on(C2S.TrickPlay, (payload: TrickPlayPayload) => act('play', payload?.cardIds ?? []));
+
+    socket.on(C2S.RoundNext, () => {
+      const room = currentRoom();
+      const playerId = socket.data.playerId as string | undefined;
+      if (!room || !playerId) return sendError('not-in-room', 'join a room first');
+      const seat = room.seats.findIndex((s) => s.player?.playerId === playerId);
+      if (seat < 0) return sendError('not-seated', 'take a seat first');
+      if (room.round?.phase !== 'scoring') return sendError('wrong-phase', 'round not finished');
+      advanceToNextRound(room);
+      manager.touch(room);
+      broadcastRoom(room);
+      runBots(room);
+    });
+
+    socket.on(C2S.ChatSend, (payload: ChatSendPayload) => {
+      const room = currentRoom();
+      const playerId = socket.data.playerId as string | undefined;
+      if (!room || !playerId) return;
+      const text = String(payload?.text ?? '').slice(0, 200);
+      if (!text) return;
+      const seat = room.seats.findIndex((s) => s.player?.playerId === playerId);
+      const nickname =
+        seat >= 0
+          ? room.seats[seat].player!.nickname
+          : (room.spectators.find((p) => p.playerId === playerId)?.nickname ?? '玩家');
+      manager.touch(room);
+      io.to(room.code).emit(S2C.ChatMessage, {
+        seat: seat >= 0 ? seat : null,
+        nickname,
+        text,
+        ts: Date.now(),
+      });
+    });
+
+    socket.on(C2S.RoomEnd, () => {
+      const room = currentRoom();
+      const playerId = socket.data.playerId as string | undefined;
+      if (!room || !playerId) return;
+      if (playerId !== room.hostPlayerId) return sendError('not-host', 'only host can end room');
+      cancelBots(room.code);
+      io.to(room.code).emit(S2C.RoomEnded, {});
+      manager.rooms.delete(room.code);
     });
 
     socket.on(C2S.RoomLeave, () => {
@@ -209,6 +280,7 @@ export function createApp(config: ServerConfig = loadConfig()): AppContext {
       socket.leave(room.code);
       socket.data.roomCode = undefined;
       if (manager.rooms.has(room.code)) broadcastRoom(room);
+      else cancelBots(room.code);
     });
 
     socket.on('disconnect', () => {
