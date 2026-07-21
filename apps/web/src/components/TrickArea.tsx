@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { RoomStateView, TrickPlayView } from '@shengji/shared';
 import CardFace from './CardFace';
+import { SUIT_SYMBOL } from '../lib/format';
 
 type Props = {
   view: RoomStateView;
@@ -36,6 +37,30 @@ export default function TrickArea({ view, settled }: Props) {
       })}
       {settled && (
         <div className="trick-caption">{winnerName ? `${winnerName} 收下这一墩` : '本墩结束'}</div>
+      )}
+      {view.phase === 'bidding' && (
+        <div className="bid-status">
+          {view.currentBid ? (
+            <>
+              <span className="bid-status-text">
+                当前叫主：
+                <b>
+                  {view.currentBid.seat === view.yourSeat
+                    ? '你'
+                    : (view.seats[view.currentBid.seat]?.nickname ?? `座位${view.currentBid.seat + 1}`)}
+                </b>
+                {view.currentBid.suit ? `（主 ${SUIT_SYMBOL[view.currentBid.suit]}）` : '（无主）'}
+              </span>
+              <span className="bid-status-cards">
+                {view.currentBid.cards.map((card) => (
+                  <CardFace key={card.id} card={card} small />
+                ))}
+              </span>
+            </>
+          ) : (
+            <span className="bid-status-text bid-status-empty">还没有人亮主</span>
+          )}
+        </div>
       )}
       {view.lastTrick.length > 0 && (
         <div className="last-trick-corner">

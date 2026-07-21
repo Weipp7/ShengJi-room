@@ -1,15 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { TrickPlayView } from '@shengji/shared';
+import type { RoomStateView, TrickPlayView } from '@shengji/shared';
 import { C2S } from '@shengji/shared';
 import { useStore } from '../store';
 import { getSocket } from '../socket';
 import { displaySort } from '../lib/handSort';
+import { deriveAnnouncements, type Announcement } from '../lib/announcements';
 import StatusBar from '../components/StatusBar';
 import TrickArea from '../components/TrickArea';
 import HandFan from '../components/HandFan';
 import ActionBar from '../components/ActionBar';
 import ResultModal from '../components/ResultModal';
 import ChatPanel from '../components/ChatPanel';
+import AnnouncementBanner from '../components/AnnouncementBanner';
 
 // 与 SeatRing 一致的旋转映射
 const POSITIONS = ['bottom', 'right', 'top', 'left'] as const;
@@ -25,6 +27,21 @@ export default function GameTable() {
   // 每墩打完：完整一墩在中央驻留 3s 再切回实时牌面
   const [settled, setSettled] = useState<{ plays: TrickPlayView[]; winnerSeat: number | null } | null>(null);
   const holdTimer = useRef<number | undefined>(undefined);
+
+  // 公告流：对比前后 view 推导亮主/反主/定庄等事件，附带递增序号避免跨局同 id 被去重
+  const [events, setEvents] = useState<Announcement[]>([]);
+  const prevView = useRef<RoomStateView | null>(null);
+  const eventSeq = useRef(0);
+  useEffect(() => {
+    const derived = deriveAnnouncements(prevView.current, view);
+    prevView.current = view;
+    if (derived.length > 0) {
+      setEvents((prev) => [
+        ...prev.slice(-8),
+        ...derived.map((d) => ({ ...d, id: `${d.id}#${eventSeq.current++}` })),
+      ]);
+    }
+  }, [view]);
 
   // 手牌变化（出牌/埋牌成功）时剔除已不在手中的选择；阶段切换时清空
   const prevPhase = useRef(view.phase);
@@ -75,6 +92,7 @@ export default function GameTable() {
   return (
     <div className="game-table">
       <StatusBar view={view} onLeave={leaveRoom} />
+      <AnnouncementBanner incoming={events} />
       <div className="table-main">
         {POSITIONS.map((pos, i) => {
           const seatIdx = (anchor + i) % 4;
@@ -92,6 +110,7 @@ export default function GameTable() {
                 {seat.nickname ?? '空位'}
               </span>
               <span className="hand-count">{seat.handCount} 张</span>
+              {isActive && <span className="thinking-tag">思考中…</span>}
               {!seat.connected && !seat.isBot && seat.nickname && <span className="bot-tag">离线</span>}
             </div>
           );
