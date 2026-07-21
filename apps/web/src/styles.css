@@ -380,3 +380,349 @@ input:focus {
     z-index: 999;
   }
 }
+
+/* ---------- 牌桌 ---------- */
+.game-table {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.status-bar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 8px 14px;
+  background: rgba(0, 0, 0, 0.35);
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+  flex-wrap: wrap;
+}
+
+.status-item b {
+  color: var(--gold);
+}
+
+.status-spacer {
+  flex: 1;
+}
+
+.turn-hint b {
+  color: #7fe08a;
+}
+
+.points {
+  color: #ffb84d !important;
+}
+
+.team-0-text {
+  color: #6db3ff;
+}
+
+.team-1-text {
+  color: #ff8a8a;
+}
+
+.table-main {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+/* ---------- 座位徽章（对局中） ---------- */
+.player-badge {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 12px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.4);
+  border: 2px solid transparent;
+  font-size: 13px;
+  z-index: 2;
+}
+
+.player-badge.team-0 {
+  border-color: rgba(109, 179, 255, 0.5);
+}
+
+.player-badge.team-1 {
+  border-color: rgba(255, 138, 138, 0.5);
+}
+
+.player-badge.active {
+  box-shadow: 0 0 12px 3px rgba(127, 224, 138, 0.55);
+  border-color: #7fe08a;
+}
+
+.player-badge.offline {
+  opacity: 0.45;
+}
+
+.player-bottom {
+  bottom: 6px;
+  left: 18px;
+}
+
+.player-right {
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.player-top {
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.player-left {
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.dealer-crown {
+  margin-right: 3px;
+}
+
+.hand-count {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+/* ---------- 出牌区 ---------- */
+.trick-area {
+  position: absolute;
+  inset: 44px 110px;
+  display: grid;
+  grid-template-areas:
+    '. top .'
+    'left . right'
+    '. bottom .';
+  grid-template-columns: 1fr auto 1fr;
+  grid-template-rows: 1fr auto 1fr;
+  align-items: center;
+  justify-items: center;
+}
+
+.trick-slot {
+  display: flex;
+  gap: 2px;
+  min-height: 64px;
+  align-items: center;
+}
+
+.trick-bottom {
+  grid-area: bottom;
+}
+
+.trick-right {
+  grid-area: right;
+}
+
+.trick-top {
+  grid-area: top;
+}
+
+.trick-left {
+  grid-area: left;
+}
+
+.last-trick {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 6px 8px;
+  background: rgba(0, 0, 0, 0.35);
+  border-radius: 8px;
+  font-size: 11px;
+  transform: scale(0.8);
+  transform-origin: top left;
+}
+
+.last-trick-row {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.last-trick-seat {
+  color: var(--muted);
+  min-width: 44px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------- 牌面 ---------- */
+.card-face {
+  position: relative;
+  width: 52px;
+  height: 74px;
+  border-radius: 6px;
+  background: #f7f4ec;
+  border: 1px solid #999;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+  cursor: default;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.card-face.red {
+  color: #c9302c;
+}
+
+.card-face.black {
+  color: #1a1a1a;
+}
+
+.card-face.selected {
+  transform: translateY(-14px);
+  box-shadow: 0 0 8px 2px rgba(255, 209, 102, 0.8);
+}
+
+.card-face.small {
+  width: 36px;
+  height: 52px;
+}
+
+.card-corner {
+  position: absolute;
+  top: 3px;
+  left: 4px;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.05;
+}
+
+.card-face.small .card-corner {
+  font-size: 11px;
+}
+
+.card-suit-big {
+  position: absolute;
+  bottom: 4px;
+  right: 5px;
+  font-size: 20px;
+}
+
+.card-face.small .card-suit-big {
+  font-size: 14px;
+}
+
+.card-joker-label {
+  position: absolute;
+  bottom: 4px;
+  right: 5px;
+  font-size: 16px;
+  font-weight: 700;
+  writing-mode: vertical-rl;
+}
+
+/* ---------- 手牌 ---------- */
+.hand-fan {
+  display: flex;
+  justify-content: center;
+  padding: 18px 12px 10px;
+  min-height: 92px;
+  overflow-x: auto;
+}
+
+.hand-fan .card-face {
+  margin-left: -26px;
+  cursor: pointer;
+  transition: transform 0.12s ease;
+}
+
+.hand-fan .card-face:first-child {
+  margin-left: 0;
+}
+
+.hand-fan.disabled .card-face {
+  cursor: default;
+  filter: brightness(0.85);
+}
+
+/* ---------- 操作栏 ---------- */
+.action-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 6px 12px;
+  min-height: 42px;
+  font-size: 14px;
+}
+
+.bury-count {
+  color: var(--gold);
+  font-weight: 700;
+}
+
+/* ---------- 结算弹窗 ---------- */
+.modal-mask {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+}
+
+.modal {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 20px 24px;
+  min-width: 340px;
+  max-width: 480px;
+  max-height: 85vh;
+  overflow-y: auto;
+}
+
+.modal h3 {
+  margin: 0 0 14px;
+  text-align: center;
+  color: var(--gold);
+}
+
+.result-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 14px;
+}
+
+.result-row:last-of-type {
+  border-bottom: none;
+}
+
+.kitty-row {
+  align-items: flex-start;
+}
+
+.kitty-cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  justify-content: flex-end;
+  max-width: 340px;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 16px;
+}

@@ -48,6 +48,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@shengji/game':
+        specifier: workspace:*
+        version: link:../../packages/game
       '@shengji/shared':
         specifier: workspace:*
         version: link:../../packages/shared
