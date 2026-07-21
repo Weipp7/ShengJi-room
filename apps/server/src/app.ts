@@ -62,6 +62,7 @@ export type AppContext = {
   manager: RoomManager;
   config: ServerConfig;
   broadcastRoom: (room: Room) => void;
+  detachRoomSockets: (code: string) => void;
 };
 
 export type AppOptions = {
@@ -104,6 +105,16 @@ export function createApp(config: ServerConfig = loadConfig(), opts: AppOptions 
     ];
     for (const p of targets) {
       io.to(playerRoom(p.playerId)).emit(S2C.RoomState, projectRoomState(room, p.playerId));
+    }
+  };
+
+  // 房间销毁后房间码可能被复用：让该频道下所有连接退出并清除绑定，避免幽灵订阅
+  const detachRoomSockets = (code: string): void => {
+    for (const id of [...(io.sockets.adapter.rooms.get(code) ?? [])]) {
+      const s = io.sockets.sockets.get(id);
+      if (!s) continue;
+      s.leave(code);
+      if (s.data.roomCode === code) s.data.roomCode = undefined;
     }
   };
 
@@ -293,6 +304,7 @@ export function createApp(config: ServerConfig = loadConfig(), opts: AppOptions 
       cancelBots(room.code);
       io.to(room.code).emit(S2C.RoomEnded, {});
       manager.rooms.delete(room.code);
+      detachRoomSockets(room.code);
     });
 
     socket.on(C2S.RoomLeave, () => {
@@ -329,5 +341,5 @@ export function createApp(config: ServerConfig = loadConfig(), opts: AppOptions 
     });
   });
 
-  return { app, httpServer, io, manager, config, broadcastRoom };
+  return { app, httpServer, io, manager, config, broadcastRoom, detachRoomSockets };
 }

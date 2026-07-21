@@ -61,5 +61,6 @@ NODE_ENV=production node apps/server/dist/index.js
 ## 第一版限制
 
 - 房间状态保存在内存中，**服务重启后所有房间清空**
-- 无账号体系：玩家身份由浏览器 `localStorage` 中的 playerId 标识，换设备/清缓存视为新玩家
+- 无账号体系：玩家身份由浏览器 `localStorage` 中的 playerId（随机 UUID，不对其他玩家下发）标识，它同时充当会话凭证——换设备/清缓存视为新玩家，凭证泄露则可被冒用
+- 房间密码明文传输与内存存储：公网部署请务必在反向代理层启用 HTTPS/WSS
 - 单实例部署（内存状态不支持水平扩展）

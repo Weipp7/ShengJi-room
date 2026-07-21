@@ -171,4 +171,27 @@ describe('socket lifecycle', () => {
     expect(state.seats[0].connected).toBe(true);
     host.close();
   });
+
+  it('room:end detaches all sockets from the room channel (code may be reused)', async () => {
+    const host = await connect();
+    host.emit(C2S.RoomCreate, { nickname: 'End0', playerId: 'end-0' });
+    const created = await once<RoomStateView>(host, S2C.RoomState);
+    const code = created.roomCode;
+    const guest = await connect();
+    guest.emit(C2S.RoomJoin, { roomCode: code, nickname: 'End1', playerId: 'end-1' });
+    await waitState(guest, (s) => s.roomCode === code);
+
+    const ended = once(guest, S2C.RoomEnded);
+    host.emit(C2S.RoomEnd, {});
+    await ended;
+    await new Promise((r) => setTimeout(r, 50));
+
+    // 房间销毁后房间码可能被复用：频道不应残留订阅，socket 的房间绑定应清空
+    expect(ctx.io.sockets.adapter.rooms.get(code)?.size ?? 0).toBe(0);
+    for (const s of ctx.io.sockets.sockets.values()) {
+      expect(s.data.roomCode).not.toBe(code);
+    }
+    host.close();
+    guest.close();
+  });
 });
