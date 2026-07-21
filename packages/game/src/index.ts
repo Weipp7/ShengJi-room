@@ -4,7 +4,7 @@ export { isTrump, effectiveSuit, cardStrength, sortHand } from './trump';
 export { isSameFace, detectCombo, findPairs, findTractors } from './combo';
 export { validateLead, validateFollow, type PlayCheck } from './follow';
 export { trickWinner, type TrickPlay } from './trick';
-export { detectBid, bidBeats, trumpSuitOfBid } from './bidding';
+export { detectBid, bidBeats, trumpSuitOfBid, availableBids, type BidOption } from './bidding';
 export {
   ROUND_SCORE_TABLE,
   kittyBonus,

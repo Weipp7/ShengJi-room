@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import type { TrickPlayView } from '@shengji/shared';
 import { C2S } from '@shengji/shared';
 import { useStore } from '../store';
 import { getSocket } from '../socket';
@@ -21,6 +22,9 @@ export default function GameTable() {
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [resultDismissed, setResultDismissed] = useState(false);
+  // 每墩打完：完整一墩在中央驻留 3s 再切回实时牌面
+  const [settled, setSettled] = useState<{ plays: TrickPlayView[]; winnerSeat: number | null } | null>(null);
+  const holdTimer = useRef<number | undefined>(undefined);
 
   // 手牌变化（出牌/埋牌成功）时剔除已不在手中的选择；阶段切换时清空
   const prevPhase = useRef(view.phase);
@@ -41,6 +45,20 @@ export default function GameTable() {
   const hand = useMemo(() => displaySort(view.yourHand, view.trump), [view.yourHand, view.trump]);
   const cardIds = () => [...selected];
 
+  // lastTrick 变化 = 刚结了一墩；此时广播里 turnSeat 即赢家（scoring 时为 null）
+  const lastTrickKey = view.lastTrick.map((p) => p.cards.map((c) => c.id).join(',')).join('|');
+  useEffect(() => {
+    if (view.lastTrick.length < 4) {
+      setSettled(null);
+      return;
+    }
+    setSettled({ plays: view.lastTrick, winnerSeat: view.turnSeat });
+    window.clearTimeout(holdTimer.current);
+    holdTimer.current = window.setTimeout(() => setSettled(null), 3000);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lastTrickKey]);
+  useEffect(() => () => window.clearTimeout(holdTimer.current), []);
+
   const toggle = (id: string) =>
     setSelected((prev) => {
       const next = new Set(prev);
@@ -52,7 +70,7 @@ export default function GameTable() {
   const anchor = view.yourSeat ?? 0;
   const activeSeat = view.phase === 'bidding' ? view.biddingTurn : view.turnSeat;
   const canSelect =
-    view.yourSeat !== null && (view.phase === 'bidding' || view.phase === 'burying' || view.phase === 'playing');
+    view.yourSeat !== null && (view.phase === 'burying' || view.phase === 'playing');
 
   return (
     <div className="game-table">
@@ -78,12 +96,12 @@ export default function GameTable() {
             </div>
           );
         })}
-        <TrickArea view={view} />
+        <TrickArea view={view} settled={settled} />
       </div>
       <ActionBar
         view={view}
         selectedCount={selected.size}
-        onBid={() => socket.emit(C2S.BidReveal, { cardIds: cardIds() })}
+        onBid={(ids) => socket.emit(C2S.BidReveal, { cardIds: ids })}
         onPass={() => socket.emit(C2S.BidPass, {})}
         onBury={() => socket.emit(C2S.KittyBury, { cardIds: cardIds() })}
         onPlay={() => socket.emit(C2S.TrickPlay, { cardIds: cardIds() })}
@@ -91,7 +109,7 @@ export default function GameTable() {
         onClear={() => setSelected(new Set())}
       />
       <HandFan hand={hand} selected={selected} disabled={!canSelect} onToggle={toggle} />
-      {view.phase === 'scoring' && !resultDismissed && (
+      {view.phase === 'scoring' && !resultDismissed && settled === null && (
         <ResultModal
           view={view}
           onNextRound={() => socket.emit(C2S.RoundNext, {})}

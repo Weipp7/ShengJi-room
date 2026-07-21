@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { detectBid, bidBeats, trumpSuitOfBid } from '../src/bidding';
+import { detectBid, bidBeats, trumpSuitOfBid, availableBids } from '../src/bidding';
 import { c, joker } from './helpers';
 
 describe('detectBid', () => {
@@ -62,5 +62,40 @@ describe('trumpSuitOfBid', () => {
   it('suit bids give trump suit; joker pairs give null (no-trump)', () => {
     expect(trumpSuitOfBid(detectBid([c('H', 2, 0)], 2, 0)!)).toBe('H');
     expect(trumpSuitOfBid(detectBid([joker('big', 0), joker('big', 1)], 2, 0)!)).toBeNull();
+  });
+});
+
+describe('availableBids', () => {
+  it('lists strongest bid per option: suit pair over single, joker pairs for NT', () => {
+    const hand = [
+      c('S', 2, 0),
+      c('D', 2, 0),
+      c('D', 2, 1),
+      c('H', 5, 0),
+      joker('big', 0),
+      joker('big', 1),
+    ];
+    const bids = availableBids(hand, 2, null);
+    const byKey = new Map(bids.map((b) => [b.suit ?? 'NT', b]));
+    expect(byKey.get('S')).toMatchObject({ kind: 'suit-single' });
+    expect(byKey.get('D')).toMatchObject({ kind: 'suit-pair' });
+    expect(byKey.get('NT')).toMatchObject({ kind: 'big-joker-pair' });
+    expect(byKey.has('H')).toBe(false); // 无级牌不可叫
+    expect(byKey.get('D')!.cards).toHaveLength(2);
+  });
+
+  it('filters bids that cannot beat the current bid', () => {
+    const current = detectBid([c('H', 2, 0), c('H', 2, 1)], 2, 3)!; // 对级牌
+    const hand = [c('S', 2, 0), joker('small', 0), joker('small', 1)];
+    const bids = availableBids(hand, 2, current);
+    // 单张级牌压不过对；小王对可反
+    expect(bids).toHaveLength(1);
+    expect(bids[0]).toMatchObject({ kind: 'small-joker-pair', suit: null });
+  });
+
+  it('empty when nothing beats current big joker pair', () => {
+    const current = detectBid([joker('big', 0), joker('big', 1)], 2, 0)!;
+    const hand = [c('S', 2, 0), c('S', 2, 1), joker('small', 0), joker('small', 1)];
+    expect(availableBids(hand, 2, current)).toHaveLength(0);
   });
 });

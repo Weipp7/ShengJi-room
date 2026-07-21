@@ -726,3 +726,88 @@ input:focus {
   gap: 12px;
   margin-top: 16px;
 }
+
+/* 叫主花色选择器 */
+.bid-options {
+  display: flex;
+  gap: 8px;
+}
+
+.bid-option {
+  position: relative;
+  width: 44px;
+  height: 40px;
+  font-size: 20px;
+  line-height: 1;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.92);
+  cursor: pointer;
+}
+
+.bid-option.lit {
+  box-shadow: 0 0 8px rgba(255, 213, 79, 0.9);
+  border-color: #ffd54f;
+}
+
+.bid-option.lit:hover {
+  transform: translateY(-2px);
+}
+
+.bid-option.dim {
+  opacity: 0.35;
+  filter: grayscale(0.8);
+  cursor: not-allowed;
+}
+
+.bid-option.suit-btn-H,
+.bid-option.suit-btn-D {
+  color: #c9302c;
+}
+
+.bid-option.suit-btn-S,
+.bid-option.suit-btn-C {
+  color: #1a1a1a;
+}
+
+.bid-option.bid-nt {
+  color: #7b1fa2;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.bid-pair-tag {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  font-size: 10px;
+  padding: 1px 4px;
+  border-radius: 6px;
+  background: #ffd54f;
+  color: #4a3200;
+  font-weight: 700;
+}
+
+/* 每墩打完驻留展示 */
+.trick-area.settled .trick-slot {
+  opacity: 0.95;
+}
+
+.trick-slot.winner {
+  outline: 2px solid #ffd54f;
+  outline-offset: 4px;
+  border-radius: 8px;
+}
+
+.trick-caption {
+  position: absolute;
+  bottom: -4px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 12px;
+  color: #ffd54f;
+  background: rgba(0, 0, 0, 0.45);
+  padding: 2px 10px;
+  border-radius: 10px;
+  white-space: nowrap;
+}

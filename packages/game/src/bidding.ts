@@ -42,3 +42,26 @@ export function bidBeats(candidate: Bid, current: Bid | null): boolean {
 export function trumpSuitOfBid(bid: Bid): Suit | null {
   return bid.suit;
 }
+
+export type BidOption = { kind: BidKind; suit: Suit | null; cards: Card[] };
+
+// 手牌中能压过当前叫主的全部选项：每花色取最强（对优于单），王对为无主
+export function availableBids(hand: Card[], level: Rank, current: Bid | null): BidOption[] {
+  const options: BidOption[] = [];
+  for (const suit of ['S', 'H', 'D', 'C'] as Suit[]) {
+    const levels = hand.filter((c) => c.kind === 'suit' && c.suit === suit && c.rank === level);
+    if (levels.length >= 2) options.push({ kind: 'suit-pair', suit, cards: levels.slice(0, 2) });
+    else if (levels.length === 1) options.push({ kind: 'suit-single', suit, cards: levels });
+  }
+  for (const j of ['small', 'big'] as const) {
+    const jokers = hand.filter((c) => c.kind === 'joker' && c.joker === j);
+    if (jokers.length >= 2) {
+      options.push({
+        kind: j === 'big' ? 'big-joker-pair' : 'small-joker-pair',
+        suit: null,
+        cards: jokers.slice(0, 2),
+      });
+    }
+  }
+  return options.filter((o) => bidBeats({ seat: -1, ...o }, current));
+}
