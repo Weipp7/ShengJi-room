@@ -12,10 +12,14 @@
   "dependencies": {
     "@shengji/shared": "workspace:*",
     "@shengji/game": "workspace:*",
-    "@shengji/bot": "workspace:*"
+    "@shengji/bot": "workspace:*",
+    "express": "^4.19.0",
+    "socket.io": "^4.7.0"
   },
   "devDependencies": {
+    "@types/express": "^4.17.21",
     "@types/node": "^22.0.0",
+    "socket.io-client": "^4.7.0",
     "tsx": "^4.16.0"
   }
 }
