@@ -23,6 +23,29 @@ function pickAnyLegalSingle(s: RoundState): string {
   throw new Error('no legal single found');
 }
 
+// 优先出对子，其次单张，返回第一组合法出牌的 id 列表
+function pickAnyLegalPlay(s: RoundState): string[] {
+  const hand = s.hands[s.turnSeat];
+  const lead = s.currentTrick.length > 0 ? s.currentTrick[0].combo : null;
+  const check = (cards: typeof hand) =>
+    lead === null ? validateLead(cards, hand, s.trump) : validateFollow(lead, cards, hand, s.trump);
+  const wanted = lead === null ? 2 : lead.cards.length;
+  if (wanted === 1) {
+    return [pickAnyLegalSingle(s)];
+  }
+  if (wanted === 2) {
+    for (let i = 0; i < hand.length; i++) {
+      for (let j = i + 1; j < hand.length; j++) {
+        if (check([hand[i], hand[j]]).ok) return [hand[i].id, hand[j].id];
+      }
+    }
+  }
+  if (lead === null) {
+    return [pickAnyLegalSingle(s)];
+  }
+  throw new Error('no legal play found');
+}
+
 function cardCount(s: RoundState): number {
   return (
     s.hands.reduce((n, h) => n + h.length, 0) +
@@ -58,6 +81,22 @@ describe('round state machine', () => {
     expect(s.result).not.toBeNull();
     expect(s.result!.defenderPoints).toBeGreaterThanOrEqual(0);
     expect(s.hands.every((h) => h.length === 0)).toBe(true);
+  });
+
+  it('round ends when hands are empty even with multi-card plays', () => {
+    let s = createRound({ plannedDealerSeat: 0, teamLevels: [2, 2], rng: mulberry32(99) });
+    for (const seat of [0, 1, 2, 3]) s = expectOk(applyPass(s, seat));
+    s = expectOk(
+      applyBury(s, 0, s.hands[0].slice(0, 8).map((card) => card.id)),
+    );
+    // 领牌尽量出对子 → 手牌会早于 25 墩打空
+    let guard = 0;
+    while (s.phase === 'playing' && guard++ < 400) {
+      s = expectOk(applyPlay(s, s.turnSeat, pickAnyLegalPlay(s)));
+    }
+    expect(s.phase).toBe('scoring');
+    expect(s.hands.every((h) => h.length === 0)).toBe(true);
+    expect(s.result).not.toBeNull();
   });
 
   it('reveal makes revealer the dealer and sets trump', () => {

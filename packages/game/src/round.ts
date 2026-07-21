@@ -1,5 +1,5 @@
 import type { Bid, Card, Rank, RoundResultView, TrumpContext } from '@shengji/shared';
-import { HAND_SIZE, KITTY_SIZE, SEAT_COUNT, teamOfSeat } from '@shengji/shared';
+import { KITTY_SIZE, SEAT_COUNT, teamOfSeat } from '@shengji/shared';
 import { bidBeats, detectBid, trumpSuitOfBid } from './bidding';
 import { buildDeck, deal, shuffle, type Rng } from './deck';
 import { validateFollow, validateLead } from './follow';
@@ -180,7 +180,8 @@ export function applyPlay(s: RoundState, seat: number, cardIds: string[]): StepR
     tricksPlayed,
     turnSeat: winner,
   };
-  if (tricksPlayed < HAND_SIZE) return { ok: true, state: base };
+  // 手牌未打空则继续下一墩（对子/拖拉机会早于 25 墩打空）
+  if (base.hands.some((h) => h.length > 0)) return { ok: true, state: base };
 
   // 最后一墩：结算全局
   const result = settleRound({
