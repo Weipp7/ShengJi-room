@@ -80,6 +80,9 @@ export function createApp(config: ServerConfig = loadConfig(), opts: AppOptions 
     room.phase = room.round ? room.round.phase : 'waiting';
   };
 
+  // 每个玩家一个专属 room：多标签页/刷新竞争下广播不依赖单一 socketId
+  const playerRoom = (playerId: string): string => `p:${playerId}`;
+
   const broadcastRoom = (room: Room): void => {
     syncPhase(room);
     const targets = [
@@ -87,9 +90,7 @@ export function createApp(config: ServerConfig = loadConfig(), opts: AppOptions 
       ...room.spectators,
     ];
     for (const p of targets) {
-      if (p.socketId && p.connected) {
-        io.to(p.socketId).emit(S2C.RoomState, projectRoomState(room, p.playerId));
-      }
+      io.to(playerRoom(p.playerId)).emit(S2C.RoomState, projectRoomState(room, p.playerId));
     }
   };
 
@@ -134,6 +135,7 @@ export function createApp(config: ServerConfig = loadConfig(), opts: AppOptions 
       socket.data.playerId = playerId;
       socket.data.roomCode = room.code;
       socket.join(room.code);
+      socket.join(playerRoom(playerId));
       for (const s of room.seats) {
         if (s.player?.playerId === playerId) {
           s.player.socketId = socket.id;
@@ -295,14 +297,17 @@ export function createApp(config: ServerConfig = loadConfig(), opts: AppOptions 
       const room = currentRoom();
       const playerId = socket.data.playerId as string | undefined;
       if (!room || !playerId) return;
+      // 同一玩家可能还有其他存活连接（多标签页/刷新竞争），全部断开才算离线
+      const stillConnected = (io.sockets.adapter.rooms.get(playerRoom(playerId))?.size ?? 0) > 0;
+      if (stillConnected) return;
       for (const s of room.seats) {
-        if (s.player?.playerId === playerId && s.player.socketId === socket.id) {
+        if (s.player?.playerId === playerId) {
           s.player.connected = false;
           s.player.socketId = null;
         }
       }
       for (const p of room.spectators) {
-        if (p.playerId === playerId && p.socketId === socket.id) {
+        if (p.playerId === playerId) {
           p.connected = false;
           p.socketId = null;
         }

@@ -144,4 +144,31 @@ describe('socket lifecycle', () => {
     expect(restored.phase).toBe('bidding');
     back.close();
   });
+
+  it('stale duplicate connection closing must not cut off live broadcasts', async () => {
+    // 同一 playerId 两条连接（新旧标签页/刷新竞争）：旧连接断开后，新连接仍须收到广播
+    const host = await connect();
+    host.emit(C2S.RoomCreate, { nickname: 'Dup', playerId: 'dup-0' });
+    const created = await once<RoomStateView>(host, S2C.RoomState);
+    const code = created.roomCode;
+
+    // 第二条连接后绑同一 playerId，随后断开（模拟幽灵标签页关闭）
+    const ghost = await connect();
+    ghost.emit(C2S.RoomJoin, { roomCode: code, nickname: 'Dup', playerId: 'dup-0' });
+    await waitState(ghost, (s) => s.roomCode === code);
+    ghost.close();
+    await new Promise((r) => setTimeout(r, 100));
+
+    // 触发广播：加机器人 → 第一条连接必须收到新状态
+    const updated = waitState(host, (s) => s.seats[1].isBot, 2000);
+    host.emit(C2S.BotAdd, { seat: 1 });
+    await expect(updated).resolves.toBeTruthy();
+    // 且本人不应被标记为离线
+    const state = await new Promise<RoomStateView>((resolve) => {
+      host.emit(C2S.BotAdd, { seat: 2 });
+      waitState(host, (s) => s.seats[2].isBot, 2000).then(resolve);
+    });
+    expect(state.seats[0].connected).toBe(true);
+    host.close();
+  });
 });
