@@ -1,4 +1,6 @@
 import http from 'node:http';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import express from 'express';
 import { Server, type Socket } from 'socket.io';
 import type {
@@ -71,6 +73,17 @@ export function createApp(config: ServerConfig = loadConfig(), opts: AppOptions 
   app.get('/healthz', (_req, res) => {
     res.json({ ok: true });
   });
+
+  // 生产模式：托管 web 静态产物并做 SPA fallback（dev 由 vite 单独提供页面）
+  // 相对本文件目录解析：dev 的 src/ 与打包后的 dist/ 都能定位到 apps/web/dist
+  if (process.env.NODE_ENV === 'production') {
+    const webDist = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../web/dist');
+    app.use(express.static(webDist));
+    app.get('*', (req, res, next) => {
+      if (req.path.startsWith('/socket.io') || req.path === '/healthz') return next();
+      res.sendFile(path.join(webDist, 'index.html'));
+    });
+  }
 
   const httpServer = http.createServer(app);
   const io = new Server(httpServer, { cors: { origin: config.corsOrigin } });
