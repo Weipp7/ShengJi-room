@@ -532,15 +532,36 @@ input:focus {
   grid-area: left;
 }
 
-.last-trick {
+.last-trick-corner {
   position: absolute;
   top: 0;
   left: 0;
+  z-index: 5;
+}
+
+.last-trick-toggle {
+  padding: 3px 10px;
+  font-size: 11px;
+  color: var(--muted);
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.last-trick-toggle:hover {
+  color: #eee;
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.last-trick {
+  margin-top: 4px;
   display: flex;
   flex-direction: column;
   gap: 3px;
   padding: 6px 8px;
-  background: rgba(0, 0, 0, 0.35);
+  background: rgba(0, 0, 0, 0.75);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 8px;
   font-size: 11px;
   transform: scale(0.8);

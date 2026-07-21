@@ -6,6 +6,8 @@ import { SUIT_SYMBOL } from '../lib/format';
 type Props = {
   view: RoomStateView;
   selectedCount: number;
+  // 上一墩驻留展示中：暂不开放出牌，避免真人抢跑打乱驻留节奏
+  holdActive: boolean;
   onBid: (cardIds: string[]) => void;
   onPass: () => void;
   onBury: () => void;
@@ -68,6 +70,7 @@ function BidOptions({ view, onBid }: { view: RoomStateView; onBid: (cardIds: str
 export default function ActionBar({
   view,
   selectedCount,
+  holdActive,
   onBid,
   onPass,
   onBury,
@@ -103,7 +106,9 @@ export default function ActionBar({
           <span className="muted">等待庄家埋底…</span>
         ))}
       {view.phase === 'playing' &&
-        (isPlayTurn ? (
+        (holdActive ? (
+          <span className="muted">看牌中…</span>
+        ) : isPlayTurn ? (
           <button className="primary" disabled={selectedCount === 0} onClick={onPlay}>
             出牌
           </button>

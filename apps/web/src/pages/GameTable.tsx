@@ -101,6 +101,7 @@ export default function GameTable() {
       <ActionBar
         view={view}
         selectedCount={selected.size}
+        holdActive={settled !== null}
         onBid={(ids) => socket.emit(C2S.BidReveal, { cardIds: ids })}
         onPass={() => socket.emit(C2S.BidPass, {})}
         onBury={() => socket.emit(C2S.KittyBury, { cardIds: cardIds() })}

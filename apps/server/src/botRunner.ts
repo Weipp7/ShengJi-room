@@ -50,11 +50,26 @@ function botAction(room: Room, seat: number): GameAction {
   };
 }
 
+// 刚结完一墩：给所有客户端留出驻留看牌的时间，机器人领出下一墩前多等一会
+const SETTLE_HOLD_MS = 3000;
+
+export function defaultBotDelay(settling: boolean): number {
+  return (settling ? SETTLE_HOLD_MS : 0) + 600 + Math.random() * 600;
+}
+
+// 机器人是否正要领出新一墩（上一墩刚收走），此时需要驻留停顿
+function isSettling(room: Room): boolean {
+  const round = room.round;
+  return (
+    round?.phase === 'playing' && round.currentTrick.length === 0 && round.lastTrick.length > 0
+  );
+}
+
 // 轮到机器人时延迟行动 → 广播 → 递归调度下一手
 export function scheduleBots(
   room: Room,
   broadcast: () => void,
-  delayMs: () => number = () => 600 + Math.random() * 600,
+  delayMs: (settling: boolean) => number = defaultBotDelay,
 ): void {
   if (pending.has(room.code)) return;
   const seat = actingSeat(room);
@@ -71,6 +86,6 @@ export function scheduleBots(
     }
     broadcast();
     scheduleBots(room, broadcast, delayMs);
-  }, delayMs());
+  }, delayMs(isSettling(room)));
   pending.set(room.code, timer);
 }

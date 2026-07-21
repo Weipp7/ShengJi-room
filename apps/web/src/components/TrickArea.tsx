@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { RoomStateView, TrickPlayView } from '@shengji/shared';
 import CardFace from './CardFace';
 
@@ -14,9 +15,10 @@ function playOf(trick: TrickPlayView[], seat: number): TrickPlayView | undefined
   return trick.find((p) => p.seat === seat);
 }
 
-// 中央出牌区：十字布局展示本墩四家出牌，左上角小字回看上一墩
+// 中央出牌区：十字布局展示本墩四家出牌，左上角按钮按需展开回看上一墩
 export default function TrickArea({ view, settled }: Props) {
   const anchor = view.yourSeat ?? 0;
+  const [lastOpen, setLastOpen] = useState(false);
   const trick = settled ? settled.plays : view.currentTrick;
   const winnerName =
     settled && settled.winnerSeat !== null ? view.seats[settled.winnerSeat]?.nickname : null;
@@ -36,16 +38,22 @@ export default function TrickArea({ view, settled }: Props) {
         <div className="trick-caption">{winnerName ? `${winnerName} 收下这一墩` : '本墩结束'}</div>
       )}
       {view.lastTrick.length > 0 && (
-        <div className="last-trick">
-          <span className="muted">上一墩</span>
-          {view.lastTrick.map((play) => (
-            <div key={play.seat} className="last-trick-row">
-              <span className="last-trick-seat">{view.seats[play.seat]?.nickname ?? ''}</span>
-              {play.cards.map((card) => (
-                <CardFace key={card.id} card={card} small />
+        <div className="last-trick-corner">
+          <button className="last-trick-toggle" onClick={() => setLastOpen((v) => !v)}>
+            {lastOpen ? '收起' : '上一墩'}
+          </button>
+          {lastOpen && (
+            <div className="last-trick">
+              {view.lastTrick.map((play) => (
+                <div key={play.seat} className="last-trick-row">
+                  <span className="last-trick-seat">{view.seats[play.seat]?.nickname ?? ''}</span>
+                  {play.cards.map((card) => (
+                    <CardFace key={card.id} card={card} small />
+                  ))}
+                </div>
               ))}
             </div>
-          ))}
+          )}
         </div>
       )}
     </div>

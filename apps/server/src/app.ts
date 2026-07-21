@@ -66,7 +66,8 @@ export type AppContext = {
 };
 
 export type AppOptions = {
-  botDelayMs?: () => number;
+  // settling=true 表示机器人正要领出新一墩（客户端在驻留展示上一墩）
+  botDelayMs?: (settling: boolean) => number;
 };
 
 export function createApp(config: ServerConfig = loadConfig(), opts: AppOptions = {}): AppContext {
