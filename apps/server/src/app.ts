@@ -104,7 +104,15 @@ export function createApp(config: ServerConfig = loadConfig(), opts: AppOptions 
     };
 
     const runBots = (room: Room): void => {
-      scheduleBots(room, () => broadcastRoom(room), opts.botDelayMs);
+      scheduleBots(
+        room,
+        () => {
+          // 机器人行动同样算房间活跃，避免进行中的对局被 TTL 误删
+          manager.touch(room);
+          broadcastRoom(room);
+        },
+        opts.botDelayMs,
+      );
     };
 
     // 入座玩家的对局动作：校验坐席 → 状态机 → 广播 + 机器人调度

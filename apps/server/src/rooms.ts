@@ -175,10 +175,15 @@ export class RoomManager {
     return items;
   }
 
-  sweepIdle(ttlMinutes: number): void {
+  sweepIdle(ttlMinutes: number): string[] {
     const cutoff = Date.now() - ttlMinutes * 60 * 1000;
+    const removed: string[] = [];
     for (const [code, room] of this.rooms) {
-      if (room.lastActiveAt < cutoff) this.rooms.delete(code);
+      if (room.lastActiveAt < cutoff) {
+        this.rooms.delete(code);
+        removed.push(code);
+      }
     }
+    return removed;
   }
 }

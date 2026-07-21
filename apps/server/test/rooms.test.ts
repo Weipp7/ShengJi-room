@@ -49,12 +49,14 @@ describe('RoomManager', () => {
     expect(room.spectators.filter((p) => p.playerId === 'p2')).toHaveLength(1);
   });
 
-  it('sweepIdle removes stale rooms', () => {
+  it('sweepIdle removes stale rooms and reports removed codes', () => {
     const m = new RoomManager();
-    const room = m.createRoom('p1', 'Alice', null);
-    room.lastActiveAt = Date.now() - 61 * 60 * 1000;
-    m.sweepIdle(60);
-    expect(m.listOpenRooms()).toHaveLength(0);
+    const stale = m.createRoom('p1', 'Alice', null);
+    const fresh = m.createRoom('p2', 'Bob', null);
+    stale.lastActiveAt = Date.now() - 61 * 60 * 1000;
+    const removed = m.sweepIdle(60);
+    expect(removed).toEqual([stale.code]);
+    expect(m.rooms.has(fresh.code)).toBe(true);
     expect(m.findByPlayerId('p1')).toBeNull();
   });
 });
