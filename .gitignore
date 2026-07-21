@@ -3,5 +3,7 @@ dist/
 .DS_Store
 *.local
 .env
+*.pem
+**/.vite/
 .superpowers/
 .pnpm-store/

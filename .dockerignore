@@ -7,3 +7,7 @@ docs
 .qoder
 Dockerfile
 *.log
+*.pem
+.DS_Store
+**/.DS_Store
+**/.vite
