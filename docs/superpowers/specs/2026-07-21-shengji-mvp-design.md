@@ -1,188 +1,190 @@
-# Shengji MVP Design
+# 升级最小可玩版本设计说明
 
-Date: 2026-07-21
+日期：2026-07-21
 
-## Context
+## 背景
 
-We are building a personal online Sheng Ji / Tractor site for playing with friends. The reference site, `https://www.shengji.org/`, is a React/Vite single page app with a dark card-table lobby, quick bot games, friend rooms, 4-player and 6-player modes, rankings, chat, spectators, replay tools, and Socket.IO real-time events. Its current Socket.IO endpoint returned Cloudflare 502 during exploration, so gameplay behavior was inferred from the shipped front-end bundle and visible UI rather than from a live game session.
+我们要做一个个人在线升级网站，用来和朋友通过浏览器一起玩。参考网站 `https://www.shengji.org/` 是一个 React/Vite 单页应用，整体是深绿色牌桌风格，包含快速机器人局、好友房、4 人和 6 人模式、排行榜、聊天、旁观、牌局复盘工具，以及 Socket.IO 实时通信。
 
-This project starts from an empty local directory. The first release will be a focused, playable 4-player MVP rather than a full clone.
+探索时，参考站的 Socket.IO 接口返回 Cloudflare 502，因此没有进入真实对局。本文档对参考站的理解来自可见界面、首页内容和已发布前端包中暴露出的状态、事件和文案。
 
-## Goals
+当前本地项目从空目录开始。第一版目标不是完整复制参考站，而是做一个聚焦、稳定、可玩的 4 人升级最小可玩版本。
 
-- Let the owner create a room and invite friends by room code.
-- Support nickname-based play without accounts.
-- Support optional room passwords.
-- Allow robots to fill empty seats so a game can start with fewer than four humans.
-- Implement a complete 4-player two-deck Sheng Ji game using the house rule set documented below.
-- Make the system runnable locally and deployable to a small cloud server.
+## 目标
 
-## Non-Goals
+- 房主可以创建房间，并通过房间码邀请朋友。
+- 支持昵称游玩，不做账号系统。
+- 支持可选房间密码。
+- 支持机器人补空位，让少于 4 个真人也能开局。
+- 实现一套完整的 4 人、两副牌升级规则，规则以本文档的本站规则为准。
+- 支持本地运行，并能部署到一台小型云服务器。
 
-- No account system.
-- No 6-player mode.
-- No ranking, leaderboard, or persistent player score.
-- No spectator mode.
-- No save/load replay feature.
-- No undo/test-room tooling.
-- No slam play / shuaipai in the first version.
-- No database-backed room persistence in the first version.
-- No multi-server horizontal scaling in the first version.
+## 非目标
 
-## Recommended Approach
+- 第一版不做账号系统。
+- 第一版不做 6 人模式。
+- 第一版不做排名、排行榜或持久化玩家积分。
+- 第一版不做旁观模式。
+- 第一版不做保存和加载牌局。
+- 第一版不做悔牌或测试房工具。
+- 第一版不做甩牌。
+- 第一版不做数据库房间持久化。
+- 第一版不做多服务器横向扩展。
 
-Use a TypeScript full-stack monorepo.
+## 推荐方案
 
-- `apps/web`: React/Vite front end.
-- `apps/server`: Node/Express + Socket.IO back end.
-- `packages/game`: pure TypeScript rules engine.
-- `packages/bot`: rule-based robot player.
-- `packages/shared`: shared types, socket event schemas, and utilities.
+采用 TypeScript 全栈单仓多包结构。
 
-The back end is the only game judge. The front end submits player intent, such as selected cards for a play, and the server validates it through `packages/game` before mutating or broadcasting state.
+- `apps/web`：React/Vite 前端。
+- `apps/server`：Node/Express + Socket.IO 后端。
+- `packages/game`：纯 TypeScript 规则引擎。
+- `packages/bot`：规则型机器人。
+- `packages/shared`：共享类型、Socket 事件结构定义和公共工具。
 
-## Architecture
+后端是唯一裁判。前端只提交玩家意图，例如“我想出这些牌”；后端调用 `packages/game` 校验，通过后才改变状态并广播。
+
+## 架构
 
 ### `apps/web`
 
-The web app owns presentation and input only:
+前端只负责展示和输入：
 
-- Lobby.
-- Room waiting table.
-- Game table.
-- Card selection.
-- Bidding controls.
-- Kitty bury controls.
-- Round result modal.
-- Chat panel.
-- Connection and error notices.
+- 大厅。
+- 房间等待牌桌。
+- 对局牌桌。
+- 手牌选择。
+- 叫主控件。
+- 埋牌控件。
+- 本局结算弹窗。
+- 聊天面板。
+- 连接状态和错误提示。
 
-The client never computes authoritative game outcomes. It may use shared helpers for display sorting and client-side affordances, but server validation remains final.
+客户端不计算权威游戏结果。客户端可以使用共享辅助函数来做展示排序和交互提示，但最终校验结果永远以后端为准。
 
 ### `apps/server`
 
-The server owns:
+后端负责：
 
-- Express health endpoint and static production hosting.
-- Socket.IO connection lifecycle.
-- In-memory room registry.
-- Player identity binding by `playerId`.
-- Room code and optional password validation.
-- Seat ownership.
-- Game phase transitions.
-- Private state fan-out per player.
-- Robot action scheduling.
-- Idle room cleanup.
+- Express 健康检查接口和生产环境静态资源托管。
+- Socket.IO 连接生命周期。
+- 内存房间注册表。
+- 基于 `playerId` 的玩家身份绑定。
+- 房间码和可选密码校验。
+- 座位归属。
+- 游戏阶段推进。
+- 按玩家分发私有状态。
+- 机器人动作调度。
+- 空闲房间回收。
 
-Room state is kept in memory for the MVP. Server restart clears rooms.
+第一版中房间状态只保存在内存里。服务器重启会清空房间，这是第一版的明确限制。
 
 ### `packages/game`
 
-This package is pure and deterministic. It depends only on TypeScript standard runtime APIs and accepts explicit inputs.
+该包是纯规则引擎，确定性、可测试，不依赖 React 或 Socket.IO。
 
-Responsibilities:
+职责：
 
-- Card model for two decks with jokers.
-- Shuffling and dealing.
-- Team and seat helpers.
-- Trump and level-rank evaluation.
-- Card sorting.
-- Point-card scoring for 5, 10, and K.
-- Play shape detection: single, pair, tractor.
-- Effective suit and trump comparison.
-- Follow-suit and follow-shape validation.
-- Trick winner calculation.
-- Kitty score and bottom-capture multiplier.
-- Round result and next-round level/dealer calculation.
+- 两副牌和大小王的牌模型。
+- 洗牌和发牌。
+- 队伍和座位辅助函数。
+- 主牌和级牌判断。
+- 牌面排序。
+- 5、10、K 分牌计分。
+- 牌型识别：单张、对子、拖拉机。
+- 有效花色和主牌比较。
+- 跟花色、跟牌型校验。
+- 每墩胜负计算。
+- 底牌分和扣底倍数。
+- 本局结果和下一局级牌、庄家计算。
 
 ### `packages/bot`
 
-This package chooses legal actions from a reduced game view:
+该包基于脱敏局面做合法决策：
 
-- Reveal/pass during bidding.
-- Bury kitty cards as dealer.
-- Play cards during tricks.
+- 叫主阶段选择亮牌或放弃。
+- 庄家埋牌。
+- 出牌阶段选择要出的牌。
 
-The bot is rule-based, not search-based. It should always produce a legal action, even if the choice is strategically simple.
+机器人是规则型，不做深度搜索。它必须始终产出合法动作，即使策略只达到普通水平。
 
 ### `packages/shared`
 
-This package contains:
+该包包含：
 
-- Shared DTOs.
-- Socket event names and payload types.
-- Public/private state types.
-- Common constants such as seat count and rank order.
+- 共享数据传输对象。
+- Socket 事件名和载荷类型。
+- 公开状态和私有状态类型。
+- 座位数、牌级顺序等公共常量。
 
-## MVP Rules
+## 第一版规则
 
-The first version implements one explicit house rule set.
+第一版实现一套明确的本站规则。
 
-- 4 players only.
-- Seats `0` and `2` are one team; seats `1` and `3` are the other team.
-- Two decks, including big and small jokers.
-- Starting level is `2`.
-- Each round has a dealer team and an attacking team.
-- Point cards are 5, 10, and K.
-- Supported play shapes are single, pair, and tractor.
-- Slam play is not supported.
+- 只支持 4 人。
+- 座位 `0` 和 `2` 为一队，座位 `1` 和 `3` 为另一队。
+- 使用两副牌，包含大王和小王。
+- 起始级牌为 `2`。
+- 每局有庄家队和闲家队。
+- 分牌为 5、10、K。
+- 支持单张、对子、拖拉机。
+- 不支持甩牌。
 
-### Bidding
+### 叫主
 
-- Bidding happens during the deal.
-- A player may reveal current-level cards to declare trump and become the tentative dealer.
-- Another player may overcall with a stronger reveal.
-- Stronger reveals are ordered as: one suited level card, two same-suit level cards, two small jokers for no-trump, two big jokers for no-trump.
-- Single-joker no-trump reveals are not part of the MVP rule set.
-- If nobody reveals in the first round, seat `0` is dealer and the round is no-trump.
-- If nobody reveals in later rounds, the scheduled dealer from the previous scoring result remains dealer and the round is no-trump.
-- Rebellion or contested dealer modes are out of scope.
+- 叫主发生在发牌阶段。
+- 玩家可以亮当前级牌来声明主花色，并成为临时庄家。
+- 其他玩家可以用更强亮牌反主。
+- 亮牌强度顺序为：单张同花色级牌、两张同花色级牌、两张小王无主、两张大王无主。
+- 第一版不支持单王无主。
+- 如果第一局无人亮主，座位 `0` 为庄家，该局无主。
+- 如果后续局无人亮主，沿用上局结算产生的计划庄家，该局无主。
+- 第一版不做造反或复杂抢庄模式。
 
-### Kitty
+### 底牌和埋牌
 
-- The dealer receives the kitty.
-- The dealer must bury the fixed kitty count before play starts.
-- Buried cards are hidden until scoring.
-- If attackers win the last trick, kitty points are added with a multiplier based on the final trick shape.
+- 庄家拿底牌。
+- 庄家必须埋回固定张数底牌后才能开始出牌。
+- 埋下的底牌在结算前隐藏。
+- 如果闲家赢得最后一墩，底牌分按最后一墩牌型倍数计入闲家总分。
 
-### Trick Play
+### 出牌
 
-- The lead player may lead one supported shape: single, pair, or tractor.
-- Followers must play the same card count.
-- Followers must follow effective suit if possible.
-- If holding a required pair in the led suit, the player must follow pair requirements where possible.
-- If holding a same-length tractor in the led suit, the player must follow tractor requirements where possible.
-- If unable to satisfy the led suit or led shape, the player may discard legal cards of the required count.
-- Trick winner is determined by trump status, effective suit, play shape, and highest comparable rank.
+- 领牌玩家可以领单张、对子或拖拉机。
+- 跟牌玩家必须跟相同张数。
+- 如果有同有效花色，必须跟同有效花色。
+- 如果领牌要求对子，且跟牌玩家在该有效花色中能组成对子，则必须尽量跟对子。
+- 如果领牌要求同长度拖拉机，且跟牌玩家在该有效花色中能组成同长度拖拉机，则必须尽量跟拖拉机。
+- 如果无法满足花色或牌型要求，可以垫出相同张数的其他合法牌。
+- 每墩胜负由主牌关系、有效花色、牌型和最大可比较牌级决定。
 
-### Round Scoring
+### 本局计分
 
-The round result uses a fixed 80-point target house scoring table:
+本局使用固定的 80 分目标本站计分表：
 
-- Attackers score 0 points: dealer team advances 3 levels.
-- Attackers from 5 to 35 points: dealer team advances 2 levels.
-- Attackers from 40 to 75 points: dealer team advances 1 level.
-- Attackers from 80 to 115 points: dealer changes to the attacking team with no level advance.
-- Attackers from 120 to 155 points: attacking team advances 1 level.
-- Attackers from 160 to 195 points: attacking team advances 2 levels.
-- Attackers at 200 or more points: attacking team advances 3 levels.
+- 闲家 0 分：庄家队升 3 级。
+- 闲家 5 到 35 分：庄家队升 2 级。
+- 闲家 40 到 75 分：庄家队升 1 级。
+- 闲家 80 到 115 分：庄家更换到闲家队，不升级。
+- 闲家 120 到 155 分：闲家队升 1 级。
+- 闲家 160 到 195 分：闲家队升 2 级。
+- 闲家 200 分及以上：闲家队升 3 级。
 
-The exact threshold table should live in `packages/game` as named constants so future variants are easy to add.
+这张阈值表应作为命名常量放在 `packages/game` 中，方便未来增加规则变体。
 
-## Real-Time Flow
+## 实时数据流
 
-The client creates or loads a browser-local `playerId`. A room join request sends:
+客户端会创建或读取浏览器本地 `playerId`。加入房间时发送：
 
-- `roomCode`.
-- `nickname`.
-- Optional password.
-- `playerId`.
+- `roomCode`。
+- `nickname`。
+- 可选密码。
+- `playerId`。
 
-If the same `playerId` reconnects to an active room, the server binds it back to its seat and resends that player's private state.
+如果同一个 `playerId` 重新连接到活动房间，后端会把它绑定回原座位，并重新发送该玩家的私有状态。
 
-### Socket Events
+### Socket 事件
 
-Client-to-server:
+客户端到服务端：
 
 - `room:create`
 - `room:join`
@@ -201,188 +203,188 @@ Client-to-server:
 - `room:leave`
 - `room:end`
 
-Server-to-client:
+服务端到客户端：
 
 - `room:state`
 - `game:error`
 - `chat:message`
 - `connection:status`
 
-All state broadcasts are player-specific. A player sees their own hand; opponents' hands are represented by card counts and public plays only.
+所有状态广播都按玩家定制。玩家只能看到自己的手牌；其他玩家的手牌只显示剩余张数和公开出的牌。
 
-## Front-End Design
+## 前端设计
 
-The interface should take structural inspiration from the reference site without copying its code or exact visual treatment. The desired feel is a focused digital card table: dark green table surface, clear team colors, compact controls, and readable cards.
+界面结构参考 shengji.org，但不复制其代码或具体视觉细节。整体风格应像一个专注的数字牌桌：深绿色桌面、清晰队伍颜色、紧凑控件和可读牌面。
 
-### Lobby
+### 大厅
 
-- Header with game title, nickname field, and connection status.
-- Left panel for quick 4-player bot-filled games.
-- Right panel for playing with friends: create room, optional password, join by room code.
-- Small room list for currently joinable rooms.
+- 顶部显示游戏名、昵称输入和连接状态。
+- 左侧区域用于快速创建 4 人机器人补位局。
+- 右侧区域用于和朋友玩：创建房间、设置可选密码、通过房间码加入。
+- 下方显示当前可加入的房间列表。
 
-### Room Waiting View
+### 房间等待页
 
-- Four seats arranged around a table.
-- Team indicators for seats `0/2` and `1/3`.
-- Player nickname or robot label per seat.
-- Controls for taking/leaving seats.
-- Room owner controls for adding/removing robots and starting.
+- 四个座位围绕牌桌排布。
+- 显示座位 `0/2` 和 `1/3` 的队伍关系。
+- 每个座位显示玩家昵称或机器人标签。
+- 支持入座和离座。
+- 房主可以添加或移除机器人，并开始游戏。
 
-### Game Table
+### 对局牌桌
 
-- Center area shows the current trick and recent completed trick.
-- Four player areas show nickname, seat, team, dealer marker, remaining card count, and disconnected status.
-- Status strip shows room code, phase, level rank, trump suit, dealer, score, and turn.
-- Bottom area shows the current player's sorted hand.
-- Card interactions support click-to-select and a primary action button.
-- Helpful controls include hint, clear selection, reveal trump, pass, and confirm bury.
+- 中央显示当前墩和上一墩。
+- 四周玩家区显示昵称、座位、队伍、庄家标记、剩余牌数和断线状态。
+- 状态条显示房间码、阶段、级牌、主牌、庄家、比分和当前回合。
+- 底部显示当前玩家排序后的手牌。
+- 手牌支持点击选择，并通过主操作按钮提交动作。
+- 辅助控件包括提示、清空选择、亮主、放弃和确认埋牌。
 
-### Mobile
+### 移动端
 
-The MVP supports mobile landscape play. Portrait mode shows a rotate-device notice. Desktop and tablet landscape are the primary targets.
+第一版支持手机横屏游玩。竖屏时显示旋转设备提示。桌面和平板横屏是第一版的主要目标。
 
-## Robot Strategy
+## 机器人策略
 
-The first robot is a normal rule-based bot.
+第一版机器人是普通规则型机器人。
 
-### Bidding
+### 叫主
 
-- Reveal when holding enough current-level cards or strong joker support.
-- Prefer suits with more trump potential.
-- Overcall only when the new reveal is stronger by the house bidding order.
+- 持有足够当前级牌或强王牌支持时考虑亮主。
+- 优先选择主牌潜力更高的花色。
+- 只有新亮牌强于当前亮牌时才反主。
 
-### Burying
+### 埋牌
 
-- Prefer burying low non-trump cards.
-- Avoid burying point cards when reasonable.
-- Preserve trump, pairs, and tractors.
-- In difficult hands, prioritize legal completion over perfect strategy.
+- 优先埋低价值非主牌。
+- 尽量避免埋分牌。
+- 尽量保留主牌、对子和拖拉机。
+- 手牌困难时优先保证合法完成，而不是追求完美策略。
 
-### Play
+### 出牌
 
-- Always ask `packages/game` for legal action constraints.
-- Lead low-value cards when no clear opportunity exists.
-- Lead pairs/tractors when they are strong and likely to pull points.
-- When following, win the trick if it can capture meaningful points or prevent opponents from scoring.
-- If a teammate is currently winning, feed points when safe.
-- If an opponent is currently winning, avoid feeding points where possible.
+- 始终通过 `packages/game` 获取合法动作约束。
+- 没有明确机会时，领低价值牌。
+- 对子或拖拉机较强且有明显拉分机会时，可以主动领出。
+- 跟牌时，如果能赢下有价值分数或阻止对手得分，则尝试压过。
+- 如果队友当前最大，尽量安全垫分。
+- 如果对手当前最大，尽量避免送分。
 
-Robot actions should be delayed by roughly 600-1200 ms so the game feels observable.
+机器人动作延迟约 600 到 1200 毫秒，让对局过程可观察。
 
-## Error Handling
+## 错误处理
 
-The server rejects invalid actions without mutating state. Common errors include:
+服务端拒绝非法动作，并且不改变房间状态。常见错误包括：
 
-- Room not found.
-- Wrong password.
-- Seat occupied.
-- Not seated.
-- Not the player's turn.
-- Wrong game phase.
-- Invalid card IDs.
-- Invalid reveal.
-- Invalid bury count.
-- Illegal play.
+- 房间不存在。
+- 密码错误。
+- 座位已被占用。
+- 玩家未入座。
+- 不是该玩家回合。
+- 游戏阶段不匹配。
+- 牌 ID 无效。
+- 亮牌无效。
+- 埋牌数量无效。
+- 出牌不合法。
 
-The client displays concise messages and then continues from the latest server state.
+客户端显示简洁提示，然后继续以最新服务端状态为准。
 
-## Testing
+## 测试
 
-### Game Engine
+### 规则引擎
 
-Unit tests should cover:
+单元测试覆盖：
 
-- Deck construction.
-- Shuffle/deal invariants.
-- Trump and effective suit behavior.
-- Card sorting.
-- Point scoring.
-- Single, pair, and tractor detection.
-- Required follow behavior.
-- Illegal play rejection.
-- Trick winner calculation.
-- Kitty scoring.
-- Round advancement thresholds.
+- 牌堆构造。
+- 洗牌和发牌不变量。
+- 主牌和有效花色。
+- 牌面排序。
+- 分牌计分。
+- 单张、对子和拖拉机识别。
+- 强制跟牌规则。
+- 非法出牌拒绝。
+- 每墩胜负计算。
+- 底牌计分。
+- 本局升级阈值。
 
-### Bot
+### 机器人
 
-Tests should cover:
+测试覆盖：
 
-- Bot always returns legal bidding decisions.
-- Bot always buries the required number of cards.
-- Bot always returns a legal trick play.
-- Fixed board states for teammate-winning and opponent-winning decisions.
+- 机器人叫主决策始终合法。
+- 机器人埋牌数量始终正确。
+- 机器人出牌始终合法。
+- 固定局面下队友最大和对手最大时的决策。
 
-### Server
+### 服务端
 
-Socket tests should cover:
+Socket 测试覆盖：
 
-- Create room.
-- Join room.
-- Optional password rejection.
-- Seat take/leave.
-- Add/remove bot.
-- Start game with full seats.
-- Reconnect by `playerId`.
-- Reject illegal phase and turn actions.
-- Broadcast private hands only to the owning player.
+- 创建房间。
+- 加入房间。
+- 可选密码拒绝。
+- 入座和离座。
+- 添加和移除机器人。
+- 满座后开始游戏。
+- 通过 `playerId` 重连。
+- 拒绝错误阶段或错误回合动作。
+- 私有手牌只广播给所属玩家。
 
-### Web
+### 前端
 
-Playwright or component tests should cover:
+Playwright 或组件测试覆盖：
 
-- Create a room from the lobby.
-- Join by room code.
-- Sit at a seat.
-- Add robots and start a game.
-- Attempt an invalid play and see an error.
-- Select cards and submit a valid action.
+- 从大厅创建房间。
+- 通过房间码加入。
+- 选择座位入座。
+- 添加机器人并开始游戏。
+- 尝试非法出牌并看到错误提示。
+- 选择牌并提交合法动作。
 
-Manual acceptance should include:
+人工验收覆盖：
 
-- One human plus three robots completes a round.
-- Two humans plus two robots complete a round.
-- A player refreshes and recovers their seat.
+- 1 个真人加 3 个机器人完成一局。
+- 2 个真人加 2 个机器人完成一局。
+- 玩家刷新浏览器后恢复原座位。
 
-## Deployment
+## 部署
 
-Local development:
+本地开发：
 
 - `pnpm install`
 - `pnpm dev`
 
-Production:
+生产环境：
 
-- Build the web app.
-- Serve static assets from the Node server.
-- Run Socket.IO and Express in the same process.
-- Package with Docker for simple VPS or hosted-platform deployment.
+- 构建前端。
+- 由 Node 服务托管静态资源。
+- Socket.IO 和 Express 运行在同一个进程。
+- 使用 Docker 打包，方便部署到 VPS 或支持 WebSocket 长连接的平台。
 
-Environment variables:
+环境变量：
 
 - `PORT`
 - `PUBLIC_URL`
 - `CORS_ORIGIN`
 - `ROOM_TTL_MINUTES`
 
-The deployment target is a single small cloud server or a platform that supports long-lived WebSocket connections.
+部署目标是一台小型云服务器，或一个支持长连接 WebSocket 的托管平台。
 
-## Acceptance Criteria
+## 验收标准
 
-- A user can create a 4-player room with nickname and optional password.
-- Friends can join by room code.
-- Empty seats can be filled with robots.
-- The room can start once four seats are occupied.
-- Players can bid, bury, play singles, pairs, and tractors.
-- Invalid actions are rejected by the server.
-- A full round reaches scoring and can advance to the next round.
-- Refreshing the browser reconnects the same player to their seat.
-- The app runs locally and has a documented production deployment path.
+- 用户可以使用昵称和可选密码创建 4 人房间。
+- 朋友可以通过房间码加入。
+- 空位可以由机器人补齐。
+- 四个座位占满后可以开始游戏。
+- 玩家可以叫主、埋牌，并出单张、对子和拖拉机。
+- 非法动作会被服务端拒绝。
+- 一局可以完整进入结算，并推进到下一局。
+- 刷新浏览器后，同一玩家可以重新连接回原座位。
+- 应用可以本地运行，并有明确的生产部署路径。
 
-## Open Implementation Notes
+## 实现备注
 
-- Use deterministic test fixtures for complex card comparisons.
-- Keep `packages/game` independent from Socket.IO so it can be tested thoroughly.
-- Keep the first scoring and bidding rules explicit as house rules.
-- Prefer small state transition functions over one large game reducer.
+- 复杂牌面比较使用确定性测试样例。
+- `packages/game` 保持独立于 Socket.IO，确保规则可充分测试。
+- 第一版计分和叫主规则明确作为本站规则。
+- 优先使用小的状态转换函数，避免一个巨大的游戏 reducer。
