@@ -1,0 +1,21 @@
+{
+  "name": "@shengji/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@shengji/shared": "workspace:*",
+    "@shengji/game": "workspace:*",
+    "@shengji/bot": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.16.0"
+  }
+}
