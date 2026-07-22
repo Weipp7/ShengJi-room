@@ -239,3 +239,33 @@
 - 亮主阶段路径：页面位于真人叫主回合，DOM 显示 `♠♥♦♣王小对过`；快速连续点击 `过` 后进入机器人叫主/庄后反牌流程，toast 为空。
 - 出牌阶段路径：真人跟牌回合，先选中一张黑桃，再对 `出牌` 执行双击；页面只推进到等待下一位机器人出牌，toast 为空。
 - 对抗发现：第一版浏览器验证中连续点击可能发生在 React disabled 重绘之前，因此补了同步 `pendingActionRef` 锁后重新验证。
+
+### 第二小闭环：错误提示持久化与可关闭
+
+#### 红测记录
+
+- 命令：`pnpm test apps/web/test/errors.test.ts apps/web/test/errorToast.test.tsx`
+- 结果：失败，`errors` 格式化模块和 `ErrorToast` 组件不存在。
+- 结论：错误仍是短字符串 toast，无法携带错误 code、解释文案和关闭行为。
+
+#### 修复后验证
+
+- 命令：`pnpm test apps/web/test/errors.test.ts apps/web/test/errorToast.test.tsx apps/web/test/actionBar.test.tsx`
+- 结果：通过，3 个测试文件，8 个测试。
+- 覆盖：`wrong-turn` 解释文案、unknown code fallback、错误 alert、关闭按钮、`data-error-code`、pending ActionBar 回归。
+
+- 命令：`pnpm test`
+- 结果：通过，28 个测试文件，215 个测试。
+
+- 命令：`pnpm typecheck`
+- 结果：通过，`pnpm -r exec tsc --noEmit` 无错误。
+
+- 命令：`pnpm build`
+- 结果：通过，shared/game/bot/server/web 均构建成功。
+
+#### 浏览器验证
+
+- 命令：`pnpm dev`
+- URL：`http://localhost:5173/`
+- 交互路径：真人领牌回合选中两张不同黑桃 -> 点击 `出牌` -> 服务端返回非法甩牌/非法组合类错误。
+- 结果：DOM 记录 `toastCode=invalid-throw`，错误文本在约 3.95 秒后仍存在，`closeCount=1`；点击 `关闭错误提示` 后 `toastText=""` 且 `closeCount=0`。

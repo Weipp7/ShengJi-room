@@ -9,19 +9,25 @@ import {
 import type { ChatMessagePayload, GameErrorPayload, RoomStateView } from '@shengji/shared';
 import { C2S, S2C } from '@shengji/shared';
 import { getNickname, getPlayerId, getSocket, ROOM_CODE_KEY } from './socket';
+import { formatGameError, type FormattedGameError } from './lib/errors';
 
 export type ConnStatus = 'connecting' | 'connected' | 'disconnected';
 
 export type StoreState = {
   view: RoomStateView | null;
-  error: string | null;
+  error: VisibleError | null;
+  errorSeq: number;
   chat: ChatMessagePayload[];
   status: ConnStatus;
 };
 
+export type VisibleError = FormattedGameError & {
+  id: number;
+};
+
 type Action =
   | { type: 'view'; view: RoomStateView }
-  | { type: 'error'; error: string }
+  | { type: 'error'; error: FormattedGameError }
   | { type: 'clear-error' }
   | { type: 'chat'; msg: ChatMessagePayload }
   | { type: 'status'; status: ConnStatus }
@@ -30,9 +36,11 @@ type Action =
 function reducer(state: StoreState, action: Action): StoreState {
   switch (action.type) {
     case 'view':
-      return { ...state, view: action.view };
-    case 'error':
-      return { ...state, error: action.error };
+      return { ...state, view: action.view, error: null };
+    case 'error': {
+      const id = state.errorSeq + 1;
+      return { ...state, error: { ...action.error, id }, errorSeq: id };
+    }
     case 'clear-error':
       return { ...state, error: null };
     case 'chat':
@@ -40,38 +48,13 @@ function reducer(state: StoreState, action: Action): StoreState {
     case 'status':
       return { ...state, status: action.status };
     case 'reset':
-      return { ...state, view: null, chat: [] };
+      return { ...state, view: null, error: null, chat: [] };
   }
-}
-
-const ERROR_TEXT: Record<string, string> = {
-  'room-not-found': '房间不存在',
-  'wrong-password': '房间密码错误',
-  'seat-taken': '该座位已被占用',
-  'seats-not-full': '4 个座位坐满后才能开始',
-  'not-host': '只有房主可以进行此操作',
-  'wrong-phase': '当前阶段不能进行此操作',
-  'wrong-turn': '还没轮到你',
-  'invalid-bid': '亮主不合法',
-  'cards-not-in-hand': '所选牌不在手牌中',
-  'invalid-combo': '所选牌不构成合法牌型（单张/对子/拖拉机）',
-  'invalid-throw': '甩牌必须是同一花色的两个以上非连续对子',
-  'wrong-count': '出牌张数必须与领出相同',
-  'must-follow-suit': '必须跟随领出花色',
-  'must-play-pair': '有对子时必须出对子',
-  'must-play-tractor': '有拖拉机时必须出拖拉机',
-  'not-dealer': '只有庄家可以埋底',
-  'bad-bury-count': '必须埋 8 张底牌',
-  'not-seated': '请先入座',
-  'not-in-room': '请先加入房间',
-};
-
-function errorText(e: GameErrorPayload): string {
-  return ERROR_TEXT[e.code] ?? `操作失败（${e.code}）`;
 }
 
 type StoreContextValue = {
   state: StoreState;
+  dismissError: () => void;
   leaveRoom: () => void;
 };
 
@@ -81,13 +64,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reducer, {
     view: null,
     error: null,
+    errorSeq: 0,
     chat: [],
     status: 'connecting',
   });
 
   useEffect(() => {
     const socket = getSocket();
-    let errorTimer: number | undefined;
 
     const onState = (view: RoomStateView) => {
       localStorage.setItem(ROOM_CODE_KEY, view.roomCode);
@@ -95,9 +78,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     };
     const onError = (e: GameErrorPayload) => {
       if (e.code === 'room-not-found') localStorage.removeItem(ROOM_CODE_KEY);
-      dispatch({ type: 'error', error: errorText(e) });
-      window.clearTimeout(errorTimer);
-      errorTimer = window.setTimeout(() => dispatch({ type: 'clear-error' }), 3000);
+      dispatch({ type: 'error', error: formatGameError(e) });
     };
     const onChat = (msg: ChatMessagePayload) => dispatch({ type: 'chat', msg });
     const onEnded = () => {
@@ -127,7 +108,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     if (socket.connected) onConnect();
 
     return () => {
-      window.clearTimeout(errorTimer);
       socket.off(S2C.RoomState, onState);
       socket.off(S2C.GameError, onError);
       socket.off(S2C.ChatMessage, onChat);
@@ -143,7 +123,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     dispatch({ type: 'reset' });
   }, []);
 
-  return <StoreContext.Provider value={{ state, leaveRoom }}>{children}</StoreContext.Provider>;
+  const dismissError = useCallback(() => {
+    dispatch({ type: 'clear-error' });
+  }, []);
+
+  return <StoreContext.Provider value={{ state, dismissError, leaveRoom }}>{children}</StoreContext.Provider>;
 }
 
 export function useStore(): StoreContextValue {

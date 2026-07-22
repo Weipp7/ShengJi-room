@@ -189,3 +189,13 @@
 **影响：** 亮牌、过牌、埋底、出牌、下一局提交后进入 pending；收到新 `RoomStateView` 或错误后释放。提示、清空选择、手牌选择在 pending 期间禁用，避免玩家误以为能修改已提交动作。
 
 **回滚：** 回滚 `ActionBar` 的 `pendingAction` prop、`GameTable` 的 `submitAction`/`pendingActionRef` 和 `actionBar.test.tsx` 的 pending 用例即可恢复旧行为。错误持久化和 socket 级幂等断言继续作为 ITER-001 后续小闭环。
+
+## 2026-07-22：ITER-001 错误提示保留到关闭或成功状态刷新
+
+**决策：** 前端错误从短字符串升级为带 `id/code/title/hint/text` 的 `VisibleError`；不再 3 秒自动消失，改为用户关闭或下一次成功 `RoomStateView` 到达时清除。
+
+**原因：** 真实玩家和 QA 都需要能复查错误内容；短 toast 容易在玩家读完前消失，也难以用浏览器自动化断言。错误 id 还解决了同一错误文案连续出现时 React effect 无法感知新事件的问题。
+
+**影响：** `wrong-turn` / `wrong-phase` 追加“动作可能已经提交或状态变化”的解释；unknown code 会展示 code 和服务端 message。`GameTable` 的 pending 释放改为监听 `state.error?.id`。
+
+**回滚：** 回滚 `apps/web/src/lib/errors.ts`、`apps/web/src/components/ErrorToast.tsx`、`apps/web/src/store.tsx` 错误对象化、`App.tsx` 顶层错误组件和对应测试/CSS 即可恢复旧 3 秒 toast。

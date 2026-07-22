@@ -98,10 +98,48 @@ input:focus {
   transform: translateX(-50%);
   background: #b3402a;
   color: #fff;
-  padding: 10px 20px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  max-width: min(720px, calc(100vw - 32px));
+  padding: 10px 12px 10px 16px;
   border-radius: 8px;
   z-index: 100;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+.toast-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  line-height: 1.35;
+}
+
+.toast-copy strong {
+  font-size: 14px;
+}
+
+.toast-copy span {
+  color: rgba(255, 255, 255, 0.86);
+  font-size: 13px;
+}
+
+.toast-close {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  background: rgba(0, 0, 0, 0.12);
+  color: #fff;
+  font-size: 18px;
+  line-height: 1;
+  padding: 0;
+}
+
+.toast-close:hover {
+  background: rgba(255, 255, 255, 0.16);
 }
 
 .conn-dot {

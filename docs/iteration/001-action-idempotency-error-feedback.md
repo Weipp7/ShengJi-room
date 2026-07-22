@@ -96,3 +96,22 @@ ITER-000。
 - 修复：新增 `pendingActionRef` 同步锁，第一次 handler 内立即写入，第二次 handler 即使发生在重新渲染前也会被阻断。
 - 浏览器验证：真实牌局中先在亮主阶段快速连续点 `过`，再在出牌阶段选中合法跟牌并对 `出牌` 执行双击；DOM 未出现 `wrong-turn` 或 `wrong-phase` toast，出牌只推进到下一位。
 - 剩余范围：错误提示持久化、重复错误弱提示、socket 级重复动作断言仍留在 ITER-001 后续小闭环。
+
+## 第二小闭环计划
+
+1. 红测：错误格式化为可解释对象，`wrong-turn` / `wrong-phase` 必须提示“动作可能已经提交或状态变化”。
+2. 红测：错误 UI 必须是 `role="alert"`，带 `data-error-code` 和可关闭按钮。
+3. 实现：新增 `formatGameError` 和 `ErrorToast`，把 store 中的错误从短字符串升级为带 id 的可见错误对象。
+4. 实现：移除 3 秒自动消失；错误保留到用户关闭或下一次成功 `RoomStateView` 到达。
+5. 浏览器：制造一次非法出牌，确认错误超过 3 秒仍可见，点击关闭后消失。
+
+## 第二小闭环结果
+
+2026-07-22 完成。
+
+- 代码：新增 `apps/web/src/lib/errors.ts`，集中维护错误标题、解释文案和 unknown code fallback。
+- 代码：新增 `apps/web/src/components/ErrorToast.tsx`，错误以 alert 展示，保留 `data-error-code`，支持关闭。
+- 代码：`StoreState.error` 改为 `VisibleError | null`，每次错误递增 `id`；同 code 连续错误也能被 UI 和 pending 释放逻辑感知。
+- 代码：收到新的 `RoomStateView` 自动清除旧错误；`leaveRoom` / `RoomEnded` reset 也清除错误。
+- 浏览器验证：真人领牌回合选择两张不同黑桃提交，收到 `invalid-throw` 错误；等待约 3.95 秒后错误仍显示，点击“关闭错误提示”后消失。
+- 剩余范围：socket 级重复动作断言还未沉淀为稳定测试；重复错误是否静默降级为弱提示仍需结合服务端错误上下文继续评估。

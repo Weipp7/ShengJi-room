@@ -68,7 +68,7 @@ export default function GameTable() {
 
   useEffect(() => {
     if (state.error !== null) releasePendingAction();
-  }, [state.error]);
+  }, [state.error?.id]);
 
   // 手牌变化（出牌/埋牌成功）时剔除已不在手中的选择；阶段切换时清空
   const prevPhase = useRef(view.phase);

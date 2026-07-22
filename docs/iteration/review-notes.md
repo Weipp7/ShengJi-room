@@ -232,3 +232,30 @@
 
 - 回滚建议：按本轮单提交回滚；手工回滚重点是 `apps/web/src/pages/GameTable.tsx`、`apps/web/src/components/ActionBar.tsx` 和 `apps/web/test/actionBar.test.tsx`。
 - 剩余风险：错误提示持久化、重复错误弱提示和 socket 级重复动作断言还未完成，继续保留在 ITER-001 后续小闭环。
+
+## 2026-07-22：ITER-001 第二小闭环多角色评审
+
+### 产品经理 / 真实玩家体验官
+
+- 发现：3 秒自动消失的错误不利于玩家理解，也无法在 review 时复盘。
+- 采纳：错误保留到用户关闭或下一次成功状态刷新；错误中显示主标题和上下文解释。
+- 发现：`wrong-turn` / `wrong-phase` 可能既是真非法，也可能是重复点击或状态刚切换。
+- 采纳：文案补充“动作可能已经提交或当前轮次/阶段已变化，请以桌面当前提示为准”，避免玩家以为自己一定操作错。
+
+### 前端交互评审
+
+- 发现：错误 code 是调试和回归的重要证据，但不应以生硬日志形式露出。
+- 采纳：DOM 保留 `data-error-code`，可用于测试和调试；屏幕文案保持玩家语言。
+- 发现：关闭控件需要小而稳定，不能挤压错误文案。
+- 采纳：toast 改为 flex 布局，文案列和 28px 关闭按钮固定分工。
+
+### QA 测试工程师
+
+- 新增 `errors.test.ts` 覆盖错误格式化和 unknown fallback。
+- 新增 `errorToast.test.tsx` 覆盖 alert、关闭按钮和 `data-error-code`。
+- 浏览器真实验证覆盖非法出牌后错误持久化超过 3 秒和手动关闭。
+
+### Release Reviewer
+
+- 回滚建议：按本轮单提交回滚；手工回滚重点是 `apps/web/src/store.tsx`、`apps/web/src/App.tsx`、`apps/web/src/lib/errors.ts`、`apps/web/src/components/ErrorToast.tsx` 和 toast CSS。
+- 剩余风险：socket 级重复动作断言仍未完成；错误是否需要分级为“强错误/弱提示”进入 ITER-001 后续小闭环。
