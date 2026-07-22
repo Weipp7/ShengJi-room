@@ -29,18 +29,18 @@
 | ITER-002 | 确定性 E2E 与多客户端浏览器验证基础设施 | P0 | Backlog | ITER-000 | `002-deterministic-e2e-harness.md` | `docs/game-iteration/test-report.md` 标注浏览器脚本未纳入仓库；UI QA matrix |
 | ITER-003 | 卡牌操作无障碍与键盘/触屏一致性 | P0 | Backlog | ITER-002 | `003-card-accessibility.md` | `CardFace.tsx` 使用 clickable div；UI QA P0 |
 | ITER-004 | Bot 调度竞态、取消和驻留节奏测试 | P1 | Backlog | ITER-000 | `004-bot-scheduler-race-coverage.md` | `botRunner.test.ts` 只测 delay range；`botRunner.ts` pending timer |
-| ITER-005 | 规则边界与结算端到端测试补齐 | P1 | Ready | ITER-000 | `005-rule-boundary-coverage.md` | rules review: cross-team level, no-trump, broken follow, kitty multiplier |
+| ITER-005 | 规则边界与结算端到端测试补齐 | P1 | Done | ITER-000 | `005-rule-boundary-coverage.md` | rules review: cross-team level, no-trump, broken follow, kitty multiplier |
 | ITER-006 | 响应式、聊天抽屉和长昵称布局硬化 | P1 | Backlog | ITER-002 | `006-responsive-chat-layout.md` | UI QA P1；当前 CSS 固定 chat drawer 与 absolute table regions |
 | ITER-007 | 收墩驻留体验：倒计时、跳过和下一手说明 | P1 | Backlog | ITER-001, ITER-004 | `007-settled-trick-review-ux.md` | Product review P2；`GameTable.tsx` 固定 3s hold |
 | ITER-008 | 重连、旁观、多标签与离线状态恢复验证 | P2 | Backlog | ITER-002 | `008-reconnect-offline-resilience.md` | `store.tsx` localStorage reconnect；server per-player rooms；existing duplicate connection tests |
 | ITER-009 | 发布、部署和回滚证据规范化 | P2 | Backlog | ITER-000 | `009-release-hardening.md` | README 第一版限制；Dockerfile；docs/game-iteration rollback |
 | ITER-010 | 机器人亮庄与反主策略升级 | P1 | Done | ITER-013, ITER-014 | `010-bot-bidding-counter-strategy.md` | 用户新增目标；`packages/bot/src/bid.ts`; `packages/game/src/bidding.ts` |
-| ITER-011 | 机器人埋牌策略升级 | P1 | Backlog | ITER-005 | `011-bot-bury-strategy.md` | 用户新增目标；`packages/bot/src/bury.ts`; `packages/game/src/scoring.ts` |
+| ITER-011 | 机器人埋牌策略升级 | P1 | Ready | ITER-005 | `011-bot-bury-strategy.md` | 用户新增目标；`packages/bot/src/bury.ts`; `packages/game/src/scoring.ts` |
 | ITER-012 | 高级机器人领牌与跟牌策略升级 | P1 | Backlog | ITER-016 | `012-advanced-bot-play-strategy.md` | 用户新增目标；`packages/bot/src/play.ts`; `packages/game/src/follow.ts`; `packages/game/src/trick.ts` |
 | ITER-013 | 任意张数亮庄、大小王反主与亮牌强度模型 | P0 | Done | ITER-000 | `013-flexible-reveal-counter-rules.md` | 用户新增目标；现有 `BidDeclaration.cards` 与 `BidStrength` 只覆盖单张/对子 |
 | ITER-014 | 庄前反牌与庄后反牌阶段 | P0 | Done | ITER-013 | `014-pre-post-dealer-counter-phases.md` | 用户新增目标；`packages/game/src/round.ts`; bidding -> bury -> play 状态机 |
 | ITER-015 | 出牌提示按钮与可解释推荐 | P1 | Backlog | ITER-012 | `015-play-hint-button.md` | 用户新增目标；`ActionBar.tsx`; `HandFan.tsx`; bot play evaluator |
-| ITER-016 | 甩牌功能与失败惩罚结算 | P0 | Backlog | ITER-005, ITER-013 | `016-throw-play-and-penalty.md` | 用户新增目标；combo/follow/trick/scoring 规则链路 |
+| ITER-016 | 甩牌功能与失败惩罚结算 | P0 | Ready | ITER-005, ITER-013 | `016-throw-play-and-penalty.md` | 用户新增目标；combo/follow/trick/scoring 规则链路 |
 | ITER-017 | 扩展功能缺陷池与回归修复流程 | P0 | Ready | ITER-000 | `017-bugfix-regression-pool.md` | 用户新增目标“多项 bug 修复”；当前体验 review 与测试缺口 |
 
 ## 当前推进项
@@ -53,7 +53,9 @@
 
 当前完成项：`ITER-010 机器人亮庄与反主策略升级`。
 
-下一项：`ITER-005 规则边界与结算端到端测试补齐`。原因是 `ITER-011` 埋牌策略和 `ITER-016` 甩牌惩罚都依赖更完整的规则/结算边界测试。
+当前完成项：`ITER-005 规则边界与结算端到端测试补齐`。
+
+下一项：`ITER-016 甩牌功能与失败惩罚结算`。原因是规则边界测试已经补齐，甩牌会影响 follow/trick/scoring/round 的核心链路，优先于埋牌和领牌策略落地。
 
 ## 已知延期但必须追踪
 

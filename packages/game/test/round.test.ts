@@ -277,6 +277,41 @@ describe('round state machine', () => {
     expect(s.lastTrickWinnerSeat).toBe(winner);
   });
 
+  it('settles kitty bonus using cards per player from a multi-card final trick', () => {
+    let s = createRound({ plannedDealerSeat: 0, teamLevels: [2, 2], rng: mulberry32(31) });
+    s = {
+      ...s,
+      phase: 'playing',
+      biddingStage: null,
+      dealerSeat: 0,
+      trump: { trumpSuit: 'S', level: 2 },
+      hands: [
+        [c('H', 4, 0), c('H', 4, 1)],
+        [c('H', 14, 0), c('H', 14, 1)],
+        [c('H', 3, 0), c('H', 3, 1)],
+        [c('H', 12, 0), c('H', 12, 1)],
+      ],
+      kitty: [c('D', 5, 0), c('D', 10, 0)],
+      currentTrick: [],
+      lastTrick: [],
+      lastTrickWinnerSeat: null,
+      defenderTrickPoints: 20,
+      tricksPlayed: 24,
+      turnSeat: 1,
+      result: null,
+    };
+
+    s = expectOk(applyPlay(s, 1, ['H-14-0', 'H-14-1']));
+    s = expectOk(applyPlay(s, 2, ['H-3-0', 'H-3-1']));
+    s = expectOk(applyPlay(s, 3, ['H-12-0', 'H-12-1']));
+    s = expectOk(applyPlay(s, 0, ['H-4-0', 'H-4-1']));
+
+    expect(s.phase).toBe('scoring');
+    expect(s.lastTrickWinnerSeat).toBe(1);
+    expect(s.result?.kittyBonus).toBe(60);
+    expect(s.result?.defenderPoints).toBe(80);
+  });
+
   it('reveal makes revealer the dealer and sets trump', () => {
     let s = createRound({ plannedDealerSeat: 0, teamLevels: [2, 2], rng: mulberry32(11) });
     // 沿叫主轮次找到第一个持有级牌的座位并亮主

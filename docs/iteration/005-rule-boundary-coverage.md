@@ -10,7 +10,7 @@ P1。
 
 ## 当前状态
 
-Backlog。
+Done。
 
 ## 背景
 
@@ -75,4 +75,12 @@ ITER-000。
 
 ## 执行记录
 
-未开始。
+2026-07-22：
+
+- 进入测试补齐阶段。
+- 本轮先补“现状锁定”测试：无主局级牌跟主约束、round 层末墩每人多张扣底倍率。
+- 如果新增测试直接通过，不改生产规则代码。
+- 目标测试第一次运行时失败 1 项，原因是测试牌例误用了 K，K 本身计 10 分；这不是规则缺陷，改为 Q 后只验证扣底倍率。
+- 目标验证：`pnpm test packages/game/test/follow.test.ts packages/game/test/round.test.ts packages/game/test/scoring.test.ts packages/game/test/trick.test.ts` 通过 4 个测试文件、51 个测试。
+- 全量验证：`pnpm test` 通过 21 个测试文件、163 个测试；`pnpm typecheck` 通过；`pnpm build` 通过。
+- 生产代码改动：无。

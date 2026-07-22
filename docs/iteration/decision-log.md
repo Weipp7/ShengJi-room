@@ -99,3 +99,13 @@
 **影响：** bot 开局更倾向亮最强高置信牌；庄后拿底后也能复用同一策略先尝试更强反牌。
 
 **回滚：** 回滚 `packages/bot/src/bid.ts`、`packages/bot/test/bot.test.ts` 和 `apps/server/src/botRunner.ts` 中传入 `biddingStage` 的改动。
+
+## 2026-07-22：ITER-005 先锁定现状规则，不改实现
+
+**决策：** 本轮只补规则边界测试，不改变现有规则实现。新增测试覆盖无主级牌必须当主跟、round 层末墩每人多张时扣底倍率来自 `lastTrickCardsPerPlayer`。
+
+**原因：** 这些边界是甩牌惩罚和埋牌策略的基础；先锁定现状能避免后续新增规则时误改结算。
+
+**影响：** 测试数增加，生产代码不变。
+
+**回滚：** 删除 `packages/game/test/follow.test.ts` 和 `packages/game/test/round.test.ts` 中本轮新增测试即可回滚。

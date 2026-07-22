@@ -128,6 +128,17 @@ describe('validateFollow', () => {
     expect(validateFollow(lead, [c('H', 3, 0)], hand, trump).ok).toBe(true);
   });
 
+  it('no-trump lead: all level cards are trump and must be followed first', () => {
+    const nt: TrumpContext = { trumpSuit: null, level: 2 };
+    const lead = detectCombo([c('S', 2, 0)], nt)!;
+    const hand = [c('D', 2, 0), c('S', 14, 0)];
+    expect(validateFollow(lead, [c('S', 14, 0)], hand, nt)).toMatchObject({
+      ok: false,
+      code: 'must-follow-suit',
+    });
+    expect(validateFollow(lead, [c('D', 2, 0)], hand, nt).ok).toBe(true);
+  });
+
   it('discard combo=null when mixed cards dumped', () => {
     const lead = detectCombo([c('S', 5, 0), c('S', 5, 1)], trump)!;
     const hand = [c('D', 3, 0), c('C', 4, 0)];
