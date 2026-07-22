@@ -29,9 +29,19 @@ export default function TrickArea({ view, settled }: Props) {
         const seatIdx = (anchor + i) % 4;
         const play = playOf(trick, seatIdx);
         const isWinner = settled !== null && settled.winnerSeat === seatIdx;
+        const isLead = trick[0]?.seat === seatIdx;
+        const seatName = view.seats[seatIdx]?.nickname ?? `座位${seatIdx + 1}`;
         return (
           <div key={pos} className={`trick-slot trick-${pos} ${isWinner ? 'winner' : ''}`}>
-            {play?.cards.map((card) => <CardFace key={card.id} card={card} small />)}
+            {play && (
+              <span className="trick-slot-name">
+                {seatIdx === view.yourSeat ? '你' : seatName}
+                {isLead ? ' 领出' : ''}
+              </span>
+            )}
+            <div className="trick-slot-cards">
+              {play?.cards.map((card) => <CardFace key={card.id} card={card} small />)}
+            </div>
           </div>
         );
       })}

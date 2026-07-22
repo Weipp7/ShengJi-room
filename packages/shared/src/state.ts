@@ -33,10 +33,12 @@ export type RoomStateView = {
   trump: TrumpContext | null;
   dealerSeat: number | null;
   currentBid: Bid | null;
+  bidHistory: Bid[];
   biddingTurn: number | null;
   turnSeat: number | null;
   currentTrick: TrickPlayView[];
   lastTrick: TrickPlayView[];
+  lastTrickWinnerSeat: number | null;
   defenderPoints: number;
   teamLevels: [Rank, Rank];
   roundResult: RoundResultView | null;

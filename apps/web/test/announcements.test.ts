@@ -30,6 +30,7 @@ function mkView(partial: Partial<RoomStateView>): RoomStateView {
     trump: { trumpSuit: null, level: 2 },
     dealerSeat: null,
     currentBid: null,
+    bidHistory: [],
     biddingTurn: 0,
     turnSeat: null,
     currentTrick: [],
@@ -62,6 +63,8 @@ describe('deriveAnnouncements', () => {
     expect(events[0].text).toContain('机器人2');
     expect(events[0].text).toContain('亮主');
     expect(events[0].text).toContain('♠');
+    expect(events[0].text).toContain('主从无主改为 ♠');
+    expect(events[0].text).toContain('级牌 2 不变');
     expect(events[0].cards).toEqual(singleBid.cards);
   });
 
@@ -83,6 +86,25 @@ describe('deriveAnnouncements', () => {
     expect(events[0].text).toContain('机器人3');
     expect(events[0].text).toContain('反主');
     expect(events[0].text).toContain('♥');
+    expect(events[0].text).toContain('主从 ♠ 改为 ♥');
+    expect(events[0].text).toContain('级牌 2 不变');
+  });
+
+  it('same-suit stronger overcall says trump suit is unchanged', () => {
+    const strongerSameSuit: Bid = {
+      seat: 2,
+      kind: 'suit-pair',
+      suit: 'S',
+      cards: [c('S', 2, 0), c('S', 2, 1)],
+    };
+    const events = deriveAnnouncements(
+      mkView({ currentBid: singleBid }),
+      mkView({ currentBid: strongerSameSuit }),
+    );
+    expect(events[0].kind).toBe('counter');
+    expect(events[0].text).toContain('反主');
+    expect(events[0].text).toContain('主仍是 ♠');
+    expect(events[0].text).toContain('级牌 2 不变');
   });
 
   it('joker pair counter announces no-trump', () => {
@@ -92,6 +114,23 @@ describe('deriveAnnouncements', () => {
     );
     expect(events[0].kind).toBe('counter');
     expect(events[0].text).toContain('无主');
+    expect(events[0].text).toContain('主从 ♥ 改为无主');
+  });
+
+  it('derives every reveal/counter from bid history when snapshots skip intermediate states', () => {
+    const events = deriveAnnouncements(
+      mkView({}),
+      mkView({
+        currentBid: ntBid,
+        bidHistory: [singleBid, pairBid, ntBid],
+      }),
+    );
+    expect(events.map((e) => e.kind)).toEqual(['bid', 'counter', 'counter']);
+    expect(events[0].text).toContain('机器人2 亮主');
+    expect(events[1].text).toContain('机器人3 反主');
+    expect(events[1].text).toContain('压过 ♠2 单张');
+    expect(events[2].text).toContain('你 反主');
+    expect(events[2].text).toContain('压过 ♥2 一对');
   });
 
   it('bidding -> burying with a bid announces the dealer', () => {

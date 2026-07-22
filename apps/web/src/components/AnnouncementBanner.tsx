@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Announcement } from '../lib/announcements';
+import { mergeAnnouncementQueue } from '../lib/announcementQueue';
 import CardFace from './CardFace';
 
 type Props = {
@@ -25,8 +26,13 @@ export default function AnnouncementBanner({ incoming }: Props) {
     const fresh = incoming.filter((a) => !seen.current.has(a.id));
     if (fresh.length === 0) return;
     for (const a of fresh) seen.current.add(a.id);
-    setQueue((q) => [...q, ...fresh]);
-  }, [incoming]);
+    const decision = mergeAnnouncementQueue(queue, current, fresh);
+    if (decision.clearCurrent) {
+      window.clearTimeout(timer.current);
+      setCurrent(null);
+    }
+    setQueue(decision.queue);
+  }, [current, incoming, queue]);
 
   useEffect(() => {
     if (current !== null || queue.length === 0) return;
@@ -38,17 +44,19 @@ export default function AnnouncementBanner({ incoming }: Props) {
 
   useEffect(() => () => window.clearTimeout(timer.current), []);
 
-  if (current === null) return null;
+  if (current === null) return <div className="announcement-lane" aria-hidden="true" />;
   return (
-    <div className={`announcement announcement-${current.kind}`}>
-      <span className="announcement-text">{current.text}</span>
-      {current.cards.length > 0 && (
-        <span className="announcement-cards">
-          {current.cards.map((card) => (
-            <CardFace key={card.id} card={card} small />
-          ))}
-        </span>
-      )}
+    <div className="announcement-lane">
+      <div className={`announcement announcement-${current.kind}`} role="status" aria-live="polite">
+        <span className="announcement-text">{current.text}</span>
+        {current.cards.length > 0 && (
+          <span className="announcement-cards">
+            {current.cards.map((card) => (
+              <CardFace key={card.id} card={card} small />
+            ))}
+          </span>
+        )}
+      </div>
     </div>
   );
 }

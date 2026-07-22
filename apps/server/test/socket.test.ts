@@ -3,7 +3,9 @@ import type { AddressInfo } from 'node:net';
 import { io as clientIo, type Socket as ClientSocket } from 'socket.io-client';
 import type { RoomStateView } from '@shengji/shared';
 import { C2S, S2C } from '@shengji/shared';
-import { createApp } from '../src/app';
+import { createRound } from '@shengji/game';
+import type { Room } from '../src/rooms';
+import { createApp, projectRoomState } from '../src/app';
 
 let ctx: ReturnType<typeof createApp>;
 let port = 0;
@@ -193,5 +195,87 @@ describe('socket lifecycle', () => {
     }
     host.close();
     guest.close();
+  });
+
+  it('projected scoring state includes final trick winner for client review', () => {
+    const base = createRound({ plannedDealerSeat: 0, teamLevels: [2, 2], rng: () => 0.1 });
+    const room: Room = {
+      code: 'WINR1',
+      password: null,
+      hostPlayerId: 'winner-p0',
+      seats: [
+        { player: { playerId: 'winner-p0', nickname: 'P0', socketId: null, connected: true }, bot: null },
+        { player: null, bot: { name: '机器人2' } },
+        { player: null, bot: { name: '机器人3' } },
+        { player: null, bot: { name: '机器人4' } },
+      ],
+      phase: 'scoring',
+      plannedDealerSeat: 0,
+      teamLevels: [2, 2],
+      spectators: [],
+      createdAt: Date.now(),
+      lastActiveAt: Date.now(),
+      round: {
+        ...base,
+        phase: 'scoring',
+        currentTrick: [],
+        lastTrick: [
+          { seat: 0, cards: [base.hands[0][0]], combo: null },
+          { seat: 1, cards: [base.hands[1][0]], combo: null },
+          { seat: 2, cards: [base.hands[2][0]], combo: null },
+          { seat: 3, cards: [base.hands[3][0]], combo: null },
+        ],
+        lastTrickWinnerSeat: 2,
+        turnSeat: 2,
+        result: {
+          defenderPoints: 0,
+          kittyCards: [],
+          kittyBonus: 0,
+          winnerTeam: 0,
+          levelDelta: 1,
+          nextDealerSeat: 0,
+          nextLevels: [3, 2],
+        },
+      },
+    };
+
+    expect(projectRoomState(room, 'winner-p0').lastTrickWinnerSeat).toBe(2);
+  });
+
+  it('projected last trick winner stays stable after the next trick has started', () => {
+    const base = createRound({ plannedDealerSeat: 0, teamLevels: [2, 2], rng: () => 0.1 });
+    const room: Room = {
+      code: 'HOLD1',
+      password: null,
+      hostPlayerId: 'hold-p0',
+      seats: [
+        { player: { playerId: 'hold-p0', nickname: 'P0', socketId: null, connected: true }, bot: null },
+        { player: null, bot: { name: '机器人2' } },
+        { player: null, bot: { name: '机器人3' } },
+        { player: null, bot: { name: '机器人4' } },
+      ],
+      phase: 'playing',
+      plannedDealerSeat: 0,
+      teamLevels: [2, 2],
+      spectators: [],
+      createdAt: Date.now(),
+      lastActiveAt: Date.now(),
+      round: {
+        ...base,
+        phase: 'playing',
+        lastTrick: [
+          { seat: 0, cards: [base.hands[0][0]], combo: null },
+          { seat: 1, cards: [base.hands[1][0]], combo: null },
+          { seat: 2, cards: [base.hands[2][0]], combo: null },
+          { seat: 3, cards: [base.hands[3][0]], combo: null },
+        ],
+        // 真实上一墩赢家是 seat 1。下一墩已由 seat 1 领出，所以当前 turnSeat 已经推进到 seat 2。
+        lastTrickWinnerSeat: 1,
+        currentTrick: [{ seat: 1, cards: [base.hands[1][1]], combo: null }],
+        turnSeat: 2,
+      } as typeof base & { lastTrickWinnerSeat: number },
+    };
+
+    expect(projectRoomState(room, 'hold-p0').lastTrickWinnerSeat).toBe(1);
   });
 });

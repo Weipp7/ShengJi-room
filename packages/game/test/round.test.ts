@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import type { RoundState, StepResult } from '../src/round';
 import { createRound, applyReveal, applyPass, applyBury, applyPlay } from '../src/round';
 import { validateLead, validateFollow } from '../src/follow';
-import { mulberry32 } from './helpers';
+import { c, mulberry32 } from './helpers';
 
 function expectOk(r: StepResult): RoundState {
   if (!r.ok) throw new Error(`step failed: ${r.error.code}`);
@@ -55,6 +55,108 @@ function cardCount(s: RoundState): number {
 }
 
 describe('round state machine', () => {
+  it('bid lifecycle resets pass streak and finalizes after three passes after latest reveal', () => {
+    let s = createRound({ plannedDealerSeat: 0, teamLevels: [2, 2], rng: mulberry32(12) });
+    s = {
+      ...s,
+      hands: [
+        [c('S', 2, 0)],
+        [c('H', 2, 0), c('H', 2, 1)],
+        [],
+        [],
+      ],
+    };
+
+    s = expectOk(applyReveal(s, 0, ['S-2-0']));
+    expect(s.bidHistory.map((event) => event.kind)).toEqual(['suit-single']);
+    expect(s).toMatchObject({
+      phase: 'bidding',
+      dealerSeat: 0,
+      biddingTurn: 1,
+      passStreak: 0,
+      trump: { trumpSuit: 'S', level: 2 },
+      currentBid: { seat: 0, kind: 'suit-single', suit: 'S' },
+    });
+
+    s = expectOk(applyReveal(s, 1, ['H-2-0', 'H-2-1']));
+    expect(s.bidHistory.map((event) => event.kind)).toEqual(['suit-single', 'suit-pair']);
+    expect(s).toMatchObject({
+      phase: 'bidding',
+      dealerSeat: 1,
+      biddingTurn: 2,
+      passStreak: 0,
+      trump: { trumpSuit: 'H', level: 2 },
+      currentBid: { seat: 1, kind: 'suit-pair', suit: 'H' },
+    });
+
+    s = expectOk(applyPass(s, 2));
+    expect(s.passStreak).toBe(1);
+    s = expectOk(applyPass(s, 3));
+    expect(s.passStreak).toBe(2);
+    s = expectOk(applyPass(s, 0));
+    expect(s.phase).toBe('burying');
+    expect(s.dealerSeat).toBe(1);
+    expect(s.trump.trumpSuit).toBe('H');
+    expect(s.hands[1]).toHaveLength(10);
+  });
+
+  it('invalid and repeated reveal attempts do not mutate state', () => {
+    let s = createRound({ plannedDealerSeat: 0, teamLevels: [2, 2], rng: mulberry32(13) });
+    s = {
+      ...s,
+      hands: [
+        [c('S', 2, 0)],
+        [c('D', 2, 0), c('C', 3, 0), c('C', 3, 1)],
+        [],
+        [],
+      ],
+    };
+    s = expectOk(applyReveal(s, 0, ['S-2-0']));
+
+    const beforeSameStrength = structuredClone(s);
+    expect(applyReveal(s, 1, ['D-2-0'])).toMatchObject({
+      ok: false,
+      error: { code: 'invalid-bid' },
+    });
+    expect(s).toEqual(beforeSameStrength);
+
+    const beforeMalformed = structuredClone(s);
+    expect(applyReveal(s, 1, ['C-3-0', 'C-3-1'])).toMatchObject({
+      ok: false,
+      error: { code: 'invalid-bid' },
+    });
+    expect(s).toEqual(beforeMalformed);
+
+    const beforeWrongTurn = structuredClone(s);
+    expect(applyReveal(s, 0, ['S-2-0'])).toMatchObject({
+      ok: false,
+      error: { code: 'wrong-turn' },
+    });
+    expect(s).toEqual(beforeWrongTurn);
+  });
+
+  it('uses the planned dealer team level for the whole bidding phase', () => {
+    let s = createRound({ plannedDealerSeat: 0, teamLevels: [2, 7], rng: mulberry32(14) });
+    s = {
+      ...s,
+      hands: [
+        [c('S', 2, 0)],
+        [c('H', 7, 0), c('H', 7, 1), c('D', 2, 0), c('D', 2, 1)],
+        [],
+        [],
+      ],
+    };
+    s = expectOk(applyReveal(s, 0, ['S-2-0']));
+    expect(applyReveal(s, 1, ['H-7-0', 'H-7-1'])).toMatchObject({
+      ok: false,
+      error: { code: 'invalid-bid' },
+    });
+
+    s = expectOk(applyReveal(s, 1, ['D-2-0', 'D-2-1']));
+    expect(s.dealerSeat).toBe(1);
+    expect(s.trump).toEqual({ trumpSuit: 'D', level: 2 });
+  });
+
   it('full round with scripted actions reaches scoring', () => {
     let s = createRound({ plannedDealerSeat: 0, teamLevels: [2, 2], rng: mulberry32(7) });
     expect(s.phase).toBe('bidding');
@@ -97,6 +199,30 @@ describe('round state machine', () => {
     expect(s.phase).toBe('scoring');
     expect(s.hands.every((h) => h.length === 0)).toBe(true);
     expect(s.result).not.toBeNull();
+  });
+
+  it('keeps last trick winner stable while the next trick advances', () => {
+    let s = createRound({ plannedDealerSeat: 0, teamLevels: [2, 2], rng: mulberry32(5) });
+    for (const seat of [0, 1, 2, 3]) s = expectOk(applyPass(s, seat));
+    s = expectOk(
+      applyBury(s, 0, s.hands[0].slice(0, 8).map((card) => card.id)),
+    );
+
+    // 第一墩用合法单张打满，记录真实收墩者。
+    while (s.phase === 'playing' && s.currentTrick.length < 3) {
+      s = expectOk(applyPlay(s, s.turnSeat, [pickAnyLegalSingle(s)]));
+    }
+    s = expectOk(applyPlay(s, s.turnSeat, [pickAnyLegalSingle(s)]));
+    expect(s.lastTrick).toHaveLength(4);
+    const winner = s.lastTrickWinnerSeat;
+    expect(winner).not.toBeNull();
+    expect(s.turnSeat).toBe(winner);
+
+    // 下一墩领出后 turnSeat 会推进，但 lastTrickWinnerSeat 必须仍指向上一墩赢家。
+    s = expectOk(applyPlay(s, s.turnSeat, [pickAnyLegalSingle(s)]));
+    expect(s.currentTrick).toHaveLength(1);
+    expect(s.turnSeat).not.toBe(winner);
+    expect(s.lastTrickWinnerSeat).toBe(winner);
   });
 
   it('reveal makes revealer the dealer and sets trump', () => {

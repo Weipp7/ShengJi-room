@@ -431,6 +431,50 @@ input:focus {
   min-height: 0;
 }
 
+/* ---------- 本局契约摘要 ---------- */
+.contract-summary {
+  min-height: 48px;
+  padding: 6px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  background: rgba(0, 0, 0, 0.24);
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+}
+
+.contract-copy {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px 10px;
+  min-width: 0;
+}
+
+.contract-title {
+  color: var(--gold);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.contract-detail {
+  color: #cfe5d9;
+  overflow-wrap: anywhere;
+  text-align: center;
+}
+
+.contract-cards {
+  display: flex;
+  gap: 3px;
+  flex-shrink: 0;
+}
+
+.contract-pending .contract-title {
+  color: var(--muted);
+}
+
 /* ---------- 座位徽章（对局中） ---------- */
 .player-badge {
   position: absolute;
@@ -512,9 +556,33 @@ input:focus {
 
 .trick-slot {
   display: flex;
+  flex-direction: column;
   gap: 2px;
   min-height: 64px;
   align-items: center;
+  justify-content: center;
+  min-width: 92px;
+}
+
+.trick-slot-cards {
+  display: flex;
+  gap: 2px;
+  min-height: 52px;
+  align-items: center;
+  justify-content: center;
+}
+
+.trick-slot-name {
+  max-width: 112px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  color: #d8ece1;
+  background: rgba(0, 0, 0, 0.38);
+  font-size: 11px;
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .trick-bottom {
@@ -835,33 +903,45 @@ input:focus {
 }
 
 /* ---------- 亮主/反主公告流 ---------- */
+.announcement-lane {
+  min-height: 46px;
+  padding: 4px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  pointer-events: none;
+}
+
 .announcement {
-  position: absolute;
-  top: 54px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 30;
   display: flex;
   align-items: center;
   gap: 10px;
   padding: 8px 18px;
   border-radius: 12px;
-  background: rgba(0, 0, 0, 0.82);
+  background: rgba(0, 0, 0, 0.94);
   border: 1px solid rgba(255, 255, 255, 0.2);
   font-size: 15px;
-  white-space: nowrap;
+  max-width: min(760px, calc(100vw - 32px));
+  text-align: center;
+  overflow-wrap: anywhere;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
   animation: announce-in 0.25s ease-out;
+  pointer-events: auto;
+}
+
+.announcement-text {
+  min-width: 0;
 }
 
 @keyframes announce-in {
   from {
     opacity: 0;
-    transform: translateX(-50%) translateY(-8px);
+    transform: translateY(-8px);
   }
   to {
     opacity: 1;
-    transform: translateX(-50%) translateY(0);
+    transform: translateY(0);
   }
 }
 
@@ -873,7 +953,7 @@ input:focus {
 .announcement-counter {
   border-color: rgba(255, 106, 106, 0.85);
   color: #ffd0d0;
-  background: rgba(64, 8, 8, 0.9);
+  background: rgba(64, 8, 8, 0.98);
   box-shadow: 0 0 18px rgba(255, 90, 90, 0.45);
 }
 
@@ -884,6 +964,19 @@ input:focus {
 .announcement-cards {
   display: flex;
   gap: 3px;
+}
+
+.announcement-cards .card-face.small {
+  width: 30px;
+  height: 44px;
+}
+
+.announcement-cards .card-face.small .card-corner {
+  font-size: 10px;
+}
+
+.announcement-cards .card-face.small .card-suit-big {
+  font-size: 12px;
 }
 
 /* 座位徽章里的「思考中」提示 */
@@ -932,4 +1025,128 @@ input:focus {
 .bid-status-cards {
   display: flex;
   gap: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .announcement,
+  .thinking-tag,
+  .hand-fan .card-face,
+  .bid-option.lit:hover {
+    animation: none;
+    transition: none;
+  }
+}
+
+@media (max-width: 900px) and (orientation: landscape) {
+  .status-bar {
+    gap: 8px;
+    padding: 5px 8px;
+    font-size: 11px;
+  }
+
+  .contract-summary {
+    min-height: 38px;
+    padding: 4px 8px;
+    gap: 8px;
+    font-size: 11px;
+  }
+
+  .contract-summary .card-face.small {
+    width: 30px;
+    height: 44px;
+  }
+
+  .player-badge {
+    padding: 4px 7px;
+    font-size: 11px;
+    max-width: 118px;
+  }
+
+  .seat-name {
+    max-width: 104px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .player-right {
+    right: 4px;
+  }
+
+  .player-left {
+    left: 4px;
+  }
+
+  .trick-area {
+    inset: 32px 72px 16px;
+  }
+
+  .trick-slot {
+    min-width: 70px;
+    min-height: 54px;
+  }
+
+  .trick-slot-name {
+    max-width: 86px;
+    font-size: 10px;
+  }
+
+  .card-face.small {
+    width: 30px;
+    height: 44px;
+  }
+
+  .card-face.small .card-corner {
+    font-size: 10px;
+  }
+
+  .card-face.small .card-suit-big {
+    font-size: 12px;
+  }
+
+  .announcement-lane {
+    min-height: 36px;
+    padding: 2px 8px;
+  }
+
+  .announcement {
+    padding: 6px 10px;
+    gap: 6px;
+    font-size: 12px;
+    max-width: calc(100vw - 20px);
+  }
+
+  .bid-status {
+    padding: 8px 12px;
+    gap: 5px;
+    font-size: 12px;
+    max-width: 240px;
+  }
+
+  .hand-fan {
+    min-height: 72px;
+    padding: 12px 8px 6px;
+  }
+
+  .action-bar {
+    min-height: 34px;
+    padding: 4px 8px;
+    gap: 6px;
+    font-size: 12px;
+  }
+
+  button {
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+
+  .bid-option {
+    width: 36px;
+    height: 34px;
+    font-size: 18px;
+  }
+
+  .chat-body {
+    width: 220px;
+  }
 }

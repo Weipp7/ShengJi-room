@@ -19,11 +19,13 @@ export type RoundState = {
   hands: Card[][];
   kitty: Card[];
   currentBid: Bid | null;
+  bidHistory: Bid[];
   biddingTurn: number;
   passStreak: number;
   turnSeat: number;
   currentTrick: TrickPlay[];
   lastTrick: TrickPlay[];
+  lastTrickWinnerSeat: number | null;
   defenderTrickPoints: number;
   tricksPlayed: number;
   result: RoundResultView | null;
@@ -51,11 +53,13 @@ export function createRound(opts: {
     hands,
     kitty,
     currentBid: null,
+    bidHistory: [],
     biddingTurn: opts.plannedDealerSeat,
     passStreak: 0,
     turnSeat: opts.plannedDealerSeat,
     currentTrick: [],
     lastTrick: [],
+    lastTrickWinnerSeat: null,
     defenderTrickPoints: 0,
     tricksPlayed: 0,
     result: null,
@@ -105,6 +109,7 @@ export function applyReveal(s: RoundState, seat: number, cardIds: string[]): Ste
     state: {
       ...s,
       currentBid: bid,
+      bidHistory: [...s.bidHistory, bid],
       dealerSeat: seat,
       trump: { ...s.trump, trumpSuit: trumpSuitOfBid(bid) },
       passStreak: 0,
@@ -176,6 +181,7 @@ export function applyPlay(s: RoundState, seat: number, cardIds: string[]): StepR
     hands,
     currentTrick: [],
     lastTrick: currentTrick,
+    lastTrickWinnerSeat: winner,
     defenderTrickPoints,
     tricksPlayed,
     turnSeat: winner,

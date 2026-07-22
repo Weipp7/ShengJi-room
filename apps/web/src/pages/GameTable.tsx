@@ -12,6 +12,7 @@ import ActionBar from '../components/ActionBar';
 import ResultModal from '../components/ResultModal';
 import ChatPanel from '../components/ChatPanel';
 import AnnouncementBanner from '../components/AnnouncementBanner';
+import ContractSummary from '../components/ContractSummary';
 
 // 与 SeatRing 一致的旋转映射
 const POSITIONS = ['bottom', 'right', 'top', 'left'] as const;
@@ -62,14 +63,16 @@ export default function GameTable() {
   const hand = useMemo(() => displaySort(view.yourHand, view.trump), [view.yourHand, view.trump]);
   const cardIds = () => [...selected];
 
-  // lastTrick 变化 = 刚结了一墩；此时广播里 turnSeat 即赢家（scoring 时为 null）
-  const lastTrickKey = view.lastTrick.map((p) => p.cards.map((c) => c.id).join(',')).join('|');
+  // lastTrick 变化 = 刚结了一墩；lastTrickWinnerSeat 兜住 scoring 阶段 turnSeat=null 的最终一墩
+  const lastTrickKey = `${view.lastTrick.map((p) => p.cards.map((c) => c.id).join(',')).join('|')}:${
+    view.lastTrickWinnerSeat ?? ''
+  }`;
   useEffect(() => {
     if (view.lastTrick.length < 4) {
       setSettled(null);
       return;
     }
-    setSettled({ plays: view.lastTrick, winnerSeat: view.turnSeat });
+    setSettled({ plays: view.lastTrick, winnerSeat: view.lastTrickWinnerSeat ?? view.turnSeat });
     window.clearTimeout(holdTimer.current);
     holdTimer.current = window.setTimeout(() => setSettled(null), 3000);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -92,6 +95,7 @@ export default function GameTable() {
   return (
     <div className="game-table">
       <StatusBar view={view} onLeave={leaveRoom} />
+      <ContractSummary view={view} />
       <AnnouncementBanner incoming={events} />
       <div className="table-main">
         {POSITIONS.map((pos, i) => {

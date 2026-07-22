@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import type { RoomStateView } from '@shengji/shared';
 import { availableBids, type BidOption } from '@shengji/game';
 import { SUIT_SYMBOL } from '../lib/format';
+import { describeWaiting } from '../lib/waiting';
 
 type Props = {
   view: RoomStateView;
@@ -92,7 +93,7 @@ export default function ActionBar({
         </>
       )}
       {view.phase === 'bidding' && seated && !isBidTurn && (
-        <span className="muted">等待其他玩家叫主…</span>
+        <span className="muted">{describeWaiting(view, false)}</span>
       )}
       {view.phase === 'burying' &&
         (isDealer ? (
@@ -103,17 +104,17 @@ export default function ActionBar({
             </button>
           </>
         ) : (
-          <span className="muted">等待庄家埋底…</span>
+          <span className="muted">{describeWaiting(view, false)}</span>
         ))}
       {view.phase === 'playing' &&
         (holdActive ? (
-          <span className="muted">看牌中…</span>
+          <span className="muted">{describeWaiting(view, true)}</span>
         ) : isPlayTurn ? (
           <button className="primary" disabled={selectedCount === 0} onClick={onPlay}>
             出牌
           </button>
         ) : (
-          <span className="muted">等待其他玩家出牌…</span>
+          <span className="muted">{describeWaiting(view, false)}</span>
         ))}
       {view.phase === 'scoring' && seated && (
         <button className="primary" onClick={onNextRound}>
