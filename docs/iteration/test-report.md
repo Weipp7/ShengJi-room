@@ -362,3 +362,20 @@
 #### 截图
 
 - `docs/iteration/artifacts/ITER-002/screenshots/two-context-counter-compact.png`
+
+### 第三小闭环：刷新重连恢复反主状态
+
+#### 修复后验证
+
+- 命令：`pnpm test:e2e`
+- 结果：通过，1 个 chromium E2E。
+- 覆盖：guest 小王反主后刷新页面；刷新后仍显示同一房间码、反主文案、小王单张和 `E2E乙`。
+
+- 命令：`pnpm test`
+- 结果：通过，29 个测试文件，221 个测试。
+
+- 命令：`pnpm typecheck`
+- 结果：通过，`pnpm -r exec tsc --noEmit` 无错误。
+
+- 命令：`pnpm build`
+- 结果：通过，shared/game/bot/server/web 均构建成功。

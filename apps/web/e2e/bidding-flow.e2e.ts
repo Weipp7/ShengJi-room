@@ -49,6 +49,12 @@ test('two browser contexts observe a deterministic reveal and counter flow', asy
   await expect(host.locator('body')).toContainText('小王单张');
   await expect(guest.locator('body')).toContainText('小王单张');
 
+  await guest.reload();
+  await expect(guest.locator('body')).toContainText(roomCode!);
+  await expect(guest.locator('body')).toContainText('反主');
+  await expect(guest.locator('body')).toContainText('小王单张');
+  await expect(guest.locator('body')).toContainText('E2E乙');
+
   await host.screenshot({ path: `${artifactDir}/two-context-counter-host.png`, fullPage: true });
   await guest.screenshot({ path: `${artifactDir}/two-context-counter-guest.png`, fullPage: true });
 
