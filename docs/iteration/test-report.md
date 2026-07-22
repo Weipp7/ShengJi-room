@@ -100,3 +100,46 @@
 ### 浏览器验证边界
 
 本阶段只调整 bot 决策和解释接口，不改变玩家可见 UI。真实浏览器试玩仍需要等 `ITER-002` 的确定性 E2E 基础设施落地后，把固定牌序和多客户端截图纳入仓库。
+
+## ITER-015 出牌提示按钮与可解释推荐
+
+### 红测记录
+
+- 命令：`pnpm test apps/web/test/playHint.test.ts apps/web/test/actionBar.test.tsx apps/web/test/handFan.test.tsx`
+- 结果：失败，`playHint` 模块不存在。
+- 结论：前端没有从 `RoomStateView` 生成可解释推荐的入口。
+
+- 命令：`pnpm test apps/web/test/playHint.test.ts apps/web/test/actionBar.test.tsx apps/web/test/handFan.test.tsx`
+- 结果：失败，ActionBar HTML 不包含 `提示` 或推荐理由。
+- 结论：玩家出牌回合没有可见提示入口。
+
+- 命令：`pnpm test apps/web/test/playHint.test.ts apps/web/test/actionBar.test.tsx apps/web/test/handFan.test.tsx`
+- 结果：失败，HandFan HTML 不包含 `hinted`。
+- 结论：推荐牌没有独立高亮状态。
+
+### 修复后验证
+
+- 命令：`pnpm test apps/web/test/playHint.test.ts apps/web/test/actionBar.test.tsx apps/web/test/handFan.test.tsx`
+- 结果：通过，3 个测试文件，8 个测试。
+- 覆盖：普通跟牌提示、非本地回合不提示、成功甩牌跟牌提示、甩牌事件进入 context key、ActionBar 提示文案、HandFan 推荐高亮。
+
+- 命令：`pnpm test`
+- 结果：通过，25 个测试文件，204 个测试。
+- 覆盖：shared/game/bot/server/web 全量单测。
+
+- 命令：`pnpm typecheck`
+- 结果：通过，`pnpm -r exec tsc --noEmit` 无错误。
+
+- 命令：`pnpm build`
+- 结果：通过，shared/game/bot/server/web 均构建成功。
+
+### 浏览器验证
+
+- 命令：`pnpm dev`
+- URL：`http://localhost:5173/`
+- 交互路径：输入昵称 `试玩员` -> `开一桌` -> `开始游戏` -> 亮大王无主 -> 选 8 张并确认埋底 -> 本人出牌回合点击 `提示`。
+- 结果：提示后操作栏显示推荐理由，DOM 记录 `selectedCount=1`、`hintedCount=1`，当前墩为空；点击 `出牌` 后进入等待机器人，DOM 记录 `selectedCount=0`、`hintedCount=0`，当前墩出现本人领出的牌。
+- 移动端：`390x844` 视口下操作栏 `clientWidth=390`、`scrollWidth=390`，无横向溢出。
+- 截图：
+  - `docs/iteration/015-browser-play-hint.png`
+  - `docs/iteration/015-browser-play-hint-mobile.png`

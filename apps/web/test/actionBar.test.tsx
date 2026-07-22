@@ -83,4 +83,29 @@ describe('ActionBar', () => {
 
     expect(html).toContain('甩牌');
   });
+
+  it('renders the play hint action and explanation during the local play turn', () => {
+    const html = renderToStaticMarkup(
+      React.createElement(ActionBar as React.ComponentType<Record<string, unknown>>, {
+        view: mkView({ phase: 'playing', turnSeat: 0 }),
+        selectedCount: 0,
+        holdActive: false,
+        playHint: {
+          cardIds: ['S-11-0'],
+          reasonCode: 'win-points-minimal',
+          message: '敌方当前领先且桌上有分，建议用最小可赢牌争抢。',
+        },
+        onHint: () => {},
+        onBid: () => {},
+        onPass: () => {},
+        onBury: () => {},
+        onPlay: () => {},
+        onNextRound: () => {},
+        onClear: () => {},
+      }),
+    );
+
+    expect(html).toContain('提示');
+    expect(html).toContain('敌方当前领先');
+  });
 });

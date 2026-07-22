@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@shengji/bot": "workspace:*",
     "@shengji/shared": "workspace:*",
     "@shengji/game": "workspace:*",
     "react": "^18.3.0",

@@ -13,9 +13,15 @@ import ResultModal from '../components/ResultModal';
 import ChatPanel from '../components/ChatPanel';
 import AnnouncementBanner from '../components/AnnouncementBanner';
 import ContractSummary from '../components/ContractSummary';
+import { createPlayHint, playHintContextKey, type PlayHint } from '../lib/playHint';
 
 // 与 SeatRing 一致的旋转映射
 const POSITIONS = ['bottom', 'right', 'top', 'left'] as const;
+
+type ActivePlayHint = {
+  hint: PlayHint;
+  contextKey: string;
+};
 
 // 对局牌桌：状态栏 + 座位环 + 出牌区 + 手牌 + 操作栏
 export default function GameTable() {
@@ -24,6 +30,7 @@ export default function GameTable() {
   const socket = getSocket();
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [playHint, setPlayHint] = useState<ActivePlayHint | null>(null);
   const [resultDismissed, setResultDismissed] = useState(false);
   // 每墩打完：完整一墩在中央驻留 3s 再切回实时牌面
   const [settled, setSettled] = useState<{ plays: TrickPlayView[]; winnerSeat: number | null } | null>(null);
@@ -50,6 +57,7 @@ export default function GameTable() {
     if (prevPhase.current !== view.phase) {
       prevPhase.current = view.phase;
       setSelected(new Set());
+      setPlayHint(null);
       setResultDismissed(false);
       return;
     }
@@ -61,7 +69,15 @@ export default function GameTable() {
   }, [view.phase, view.yourHand]);
 
   const hand = useMemo(() => displaySort(view.yourHand, view.trump), [view.yourHand, view.trump]);
+  const availablePlayHint = useMemo(() => createPlayHint(view), [view]);
+  const currentPlayHintKey = useMemo(() => playHintContextKey(view), [view]);
+  const activePlayHint = playHint?.contextKey === currentPlayHintKey ? playHint.hint : null;
+  const hintedCards = useMemo(() => new Set(activePlayHint?.cardIds ?? []), [activePlayHint]);
   const cardIds = () => [...selected];
+
+  useEffect(() => {
+    setPlayHint((prev) => (prev !== null && prev.contextKey !== currentPlayHintKey ? null : prev));
+  }, [currentPlayHintKey]);
 
   // lastTrick 变化 = 刚结了一墩；lastTrickWinnerSeat 兜住 scoring 阶段 turnSeat=null 的最终一墩
   const lastTrickKey = `${view.lastTrick.map((p) => p.cards.map((c) => c.id).join(',')).join('|')}:${
@@ -78,14 +94,35 @@ export default function GameTable() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lastTrickKey]);
   useEffect(() => () => window.clearTimeout(holdTimer.current), []);
+  useEffect(() => {
+    if (settled !== null) setPlayHint(null);
+  }, [settled]);
 
-  const toggle = (id: string) =>
+  const toggle = (id: string) => {
+    setPlayHint(null);
     setSelected((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
       return next;
     });
+  };
+
+  const applyPlayHint = () => {
+    if (availablePlayHint === null) return;
+    setSelected(new Set(availablePlayHint.cardIds));
+    setPlayHint({ hint: availablePlayHint, contextKey: currentPlayHintKey });
+  };
+
+  const playSelected = () => {
+    setPlayHint(null);
+    socket.emit(C2S.TrickPlay, { cardIds: cardIds() });
+  };
+
+  const clearSelection = () => {
+    setPlayHint(null);
+    setSelected(new Set());
+  };
 
   const anchor = view.yourSeat ?? 0;
   const activeSeat = view.phase === 'bidding' ? view.biddingTurn : view.turnSeat;
@@ -124,15 +161,18 @@ export default function GameTable() {
       <ActionBar
         view={view}
         selectedCount={selected.size}
+        playHint={activePlayHint}
+        hintAvailable={availablePlayHint !== null && settled === null}
         holdActive={settled !== null}
         onBid={(ids) => socket.emit(C2S.BidReveal, { cardIds: ids })}
         onPass={() => socket.emit(C2S.BidPass, {})}
         onBury={() => socket.emit(C2S.KittyBury, { cardIds: cardIds() })}
-        onPlay={() => socket.emit(C2S.TrickPlay, { cardIds: cardIds() })}
+        onHint={applyPlayHint}
+        onPlay={playSelected}
         onNextRound={() => socket.emit(C2S.RoundNext, {})}
-        onClear={() => setSelected(new Set())}
+        onClear={clearSelection}
       />
-      <HandFan hand={hand} selected={selected} disabled={!canSelect} onToggle={toggle} />
+      <HandFan hand={hand} selected={selected} hinted={hintedCards} disabled={!canSelect} onToggle={toggle} />
       {view.phase === 'scoring' && !resultDismissed && settled === null && (
         <ResultModal
           view={view}

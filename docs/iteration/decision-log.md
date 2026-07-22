@@ -139,3 +139,23 @@
 **影响：** bot 领牌会优先保留组合，跟牌会在有分可抢时用最小可赢组合，队友领先时送分并省控制牌。`throw-pairs` 跟牌仍遵循当前规则中“领出者固定赢”，不设计反甩。
 
 **回滚：** 回滚 `packages/bot/src/play.ts` 的 `explainPlay`、`PlayReason`、组合排序 helper 和对应 `packages/bot/test/bot.test.ts` 用例；`decidePlay` 可恢复为直接返回原 `decideLead/decideFollow` 结果。
+
+## 2026-07-22：ITER-015 出牌提示只做本地推荐和解释
+
+**决策：** 前端出牌提示复用 `@shengji/bot` 的 `explainPlay`，点击“提示”只在本地选中推荐牌并展示一句理由，不自动发送 `TrickPlay`，也不新增服务端协议。
+
+**原因：** 用户目标是让玩家理解当前可选出牌，而不是让系统代打。复用 bot 策略能避免提示和机器人决策分叉，且本地状态不会改变公共牌局。
+
+**影响：** web 包显式依赖 `@shengji/bot`；前端需要用 `detectCombo` 和甩牌事件重建当前墩的 `Combo`。提示状态绑定阶段、座位、主牌、手牌、当前墩和甩牌事件元数据，避免状态变化后残留。
+
+**回滚：** 回滚 `apps/web/src/lib/playHint.ts`、`GameTable.tsx`、`ActionBar.tsx`、`HandFan.tsx`、`CardFace.tsx`、`styles.css`、web 依赖声明和对应测试，即可恢复无提示按钮的出牌流程。
+
+## 2026-07-22：ITER-015 暂不引入新的前端交互测试框架
+
+**决策：** 本轮不引入 React Testing Library 或 jsdom；保留现有 SSR 组件测试风格，动态点击流程用浏览器自动化验证并记录截图。
+
+**原因：** 当前仓库测试体系以规则纯函数、服务端 socket 和 SSR markup 为主。为了一个小闭环引入新测试栈会扩大依赖和配置风险；稳定浏览器 E2E 已由 `ITER-002` 专项追踪。
+
+**影响：** `GameTable` 点击提示、手动出牌、移动端布局的证据写入 `015-play-hint-button.md` 和 `test-report.md`，但还不是可重复 CI fixture。
+
+**回滚：** 文档决策可单独调整；如果后续 `ITER-002` 引入 E2E，可把本轮浏览器路径迁移为自动化脚本。

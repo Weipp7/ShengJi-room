@@ -51,6 +51,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@shengji/bot':
+        specifier: workspace:*
+        version: link:../../packages/bot
       '@shengji/game':
         specifier: workspace:*
         version: link:../../packages/game

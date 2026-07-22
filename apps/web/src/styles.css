@@ -742,6 +742,19 @@ input:focus {
   box-shadow: 0 0 8px 2px rgba(255, 209, 102, 0.8);
 }
 
+.card-face.hinted {
+  transform: translateY(-8px);
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+
+.card-face.selected.hinted {
+  transform: translateY(-14px);
+  box-shadow:
+    0 0 8px 2px rgba(255, 209, 102, 0.8),
+    0 0 0 2px rgba(77, 159, 255, 0.8);
+}
+
 .card-face.small {
   width: 36px;
   height: 52px;
@@ -818,6 +831,18 @@ input:focus {
 .bury-count {
   color: var(--gold);
   font-weight: 700;
+}
+
+.hint-button {
+  border-color: rgba(77, 159, 255, 0.55);
+  color: #dcecff;
+}
+
+.play-hint-copy {
+  max-width: min(520px, 48vw);
+  color: #dcecff;
+  font-size: 13px;
+  line-height: 1.35;
 }
 
 /* ---------- 结算弹窗 ---------- */

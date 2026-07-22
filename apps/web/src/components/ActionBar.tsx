@@ -3,15 +3,19 @@ import type { RoomStateView } from '@shengji/shared';
 import { availableBids, type BidOption } from '@shengji/game';
 import { SUIT_SYMBOL } from '../lib/format';
 import { describeWaiting } from '../lib/waiting';
+import type { PlayHint } from '../lib/playHint';
 
 type Props = {
   view: RoomStateView;
   selectedCount: number;
+  playHint?: PlayHint | null;
+  hintAvailable?: boolean;
   // 上一墩驻留展示中：暂不开放出牌，避免真人抢跑打乱驻留节奏
   holdActive: boolean;
   onBid: (cardIds: string[]) => void;
   onPass: () => void;
   onBury: () => void;
+  onHint?: () => void;
   onPlay: () => void;
   onNextRound: () => void;
   onClear: () => void;
@@ -91,10 +95,13 @@ function BidOptions({ view, onBid }: { view: RoomStateView; onBid: (cardIds: str
 export default function ActionBar({
   view,
   selectedCount,
+  playHint = null,
+  hintAvailable = false,
   holdActive,
   onBid,
   onPass,
   onBury,
+  onHint,
   onPlay,
   onNextRound,
   onClear,
@@ -137,9 +144,22 @@ export default function ActionBar({
         (holdActive ? (
           <span className="muted">{describeWaiting(view, true)}</span>
         ) : isPlayTurn ? (
-          <button className="primary" disabled={selectedCount === 0} onClick={onPlay}>
-            {playButtonText}
-          </button>
+          <>
+            {(hintAvailable || playHint) && (
+              <button
+                className="hint-button"
+                disabled={!hintAvailable || !onHint}
+                onClick={onHint}
+                title={hintAvailable ? '按当前局面推荐一手牌' : '当前没有可用提示'}
+              >
+                提示
+              </button>
+            )}
+            <button className="primary" disabled={selectedCount === 0} onClick={onPlay}>
+              {playButtonText}
+            </button>
+            {playHint && <span className="play-hint-copy">推荐：{playHint.message}</span>}
+          </>
         ) : (
           <span className="muted">{describeWaiting(view, false)}</span>
         ))}

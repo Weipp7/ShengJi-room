@@ -1,5 +1,56 @@
 # Iteration Review Notes
 
+## 2026-07-22：ITER-015 出牌提示按钮与可解释推荐评审
+
+### 产品经理 / 真实玩家体验官
+
+- 发现：提示入口必须出现在玩家可决策的位置，但不能自动替玩家出牌。
+  - 采纳：只在本人出牌回合展示“提示”，点击后只本地选中推荐牌并显示理由，正式出牌仍需玩家点击“出牌”。
+- 发现：提示理由必须短且可感知，避免把提示变成教程长文。
+  - 采纳：每个 `PlayReason` 映射为一句话，显示在操作栏。
+
+### 规则专家 / 对抗评审
+
+- 发现：前端投影没有 `combo`，提示前必须按当前主牌重建首家牌型。
+  - 采纳：`createPlayHint` 使用 `detectCombo` 重建普通当前墩；成功甩牌重建 `throw-pairs`，失败甩牌按实际落桌牌型处理。
+- 发现：甩牌元数据变化时，即使牌面相同，旧提示也应失效。
+  - 采纳：`playHintContextKey` 纳入 `throwEvent.id/success/n/penaltyPoints/actualCards/challengedCards`。
+
+### 前端交互评审
+
+- 发现：推荐牌需要和已选牌有独立视觉层级。
+  - 采纳：`CardFace` 新增 `hinted` 状态；推荐牌被自动选中后同时具有 `selected` 和 `hinted`。
+- 发现：移动端操作栏容易被推荐理由撑宽。
+  - 采纳：推荐文案设置宽度约束；浏览器 390px 视口验证无横向溢出。
+
+### QA 测试工程师
+
+- 新增测试覆盖：
+  - `apps/web/test/playHint.test.ts`
+  - `apps/web/test/actionBar.test.tsx`
+  - `apps/web/test/handFan.test.tsx`
+- 浏览器验证覆盖：
+  - 提示不自动出牌；
+  - 点击提示后推荐牌高亮且出牌按钮可用；
+  - 手动出牌后提示/选择清空；
+  - 移动端操作栏不横向溢出。
+
+### 代码审查
+
+- Critical：无。
+- Important：无。
+- Minor：提示上下文 key 缺少甩牌事件元数据。
+  - 已修复：context key 纳入甩牌事件关键字段，并补单测。
+- Minor：成功甩牌 combo 重建没有镜像规则层 pair 校验和 components。
+  - 已修复：重建时要求同有效花色、非普通 combo、全由对子组成，并构造 pair components。
+- Minor：缺少成功甩牌提示覆盖。
+  - 已修复：新增 `follow-throw-pairs` 提示测试。
+
+### Release Reviewer
+
+- 回滚建议：按 ITER-015 单提交回滚；手工回滚重点是 `apps/web/src/lib/playHint.ts`、`GameTable.tsx`、`ActionBar.tsx`、`HandFan.tsx`、`CardFace.tsx`、`styles.css` 和 web 依赖声明。
+- 剩余风险：缺少仓库内可重复浏览器 E2E fixture；当前浏览器证据为手工自动化记录，稳定 E2E 仍由 `ITER-002` 跟踪。
+
 ## 2026-07-22：ITER-012 高级机器人领牌与跟牌策略评审
 
 ### 产品经理 / 真实玩家体验官
