@@ -10,7 +10,7 @@ P1
 
 ## 当前状态
 
-Backlog
+Done
 
 ## 背景
 
@@ -76,4 +76,13 @@ Backlog
 
 ## 执行记录
 
-尚未开始。
+2026-07-22：
+
+- 进入实现阶段。
+- 本轮聚焦 bot 亮庄/反主策略，不修改埋牌和出牌策略。
+- 策略原则：复用规则层候选和强度比较；优先选择最强且有牌力支撑的候选；同队已有同张数强约时不乱反；庄后反牌复用同一策略。
+- RED：`pnpm test packages/bot/test/bot.test.ts` 失败 3 项，失败点为开局先返回弱花色单张、不能用单张大王反小王、会用同张数小王对反队友级牌对。
+- GREEN：`decideBid` 改为复用 `availableBids`，按张数、王/花色类别和花色长度评分选最强候选；同队已有同张数合约时不反；`pnpm test packages/bot/test/bot.test.ts` 通过 8 项。
+- 接线：`botRunner` 在 bidding 和 post-dealer burying 阶段都向 bot 传入 `biddingStage`，庄后反牌复用同一策略。
+- 目标验证：`pnpm test packages/bot/test/bot.test.ts apps/server/test/botRunner.test.ts apps/server/test/gameFlow.test.ts` 通过 3 个测试文件、14 个测试；`pnpm typecheck` 通过。
+- 全量验证：`pnpm test` 通过 21 个测试文件、161 个测试；`pnpm build` 通过。

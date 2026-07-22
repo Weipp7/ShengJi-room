@@ -89,3 +89,13 @@
 **影响：** `RoomStateView` 和 `RoundState` 新增 `biddingStage`；bot 在 burying 阶段会先尝试庄后反牌，再埋底；UI 会在契约摘要、等待文案和 ActionBar 展示庄后窗口。
 
 **回滚：** 回滚 `biddingStage` 字段、`applyReveal` 的 burying 分支、ActionBar 庄后可反 UI 和 botRunner burying reveal 尝试，即可恢复旧的 bidding -> burying -> playing 流程。
+
+## 2026-07-22：ITER-010 bot 反主先做强度评分和同队保护
+
+**决策：** bot 叫主/反主候选由规则层 `availableBids` 生成，策略层只负责过滤和排序。排序优先张数、王/花色类别和花色长度；同队已有同张数合约时不做仅类别更高的反主。
+
+**原因：** 这样能避免 bot 重复实现规则强度，也能修复“先遇到弱花色单张就亮、漏掉大王反小王、乱反队友强约”的三个体验问题。
+
+**影响：** bot 开局更倾向亮最强高置信牌；庄后拿底后也能复用同一策略先尝试更强反牌。
+
+**回滚：** 回滚 `packages/bot/src/bid.ts`、`packages/bot/test/bot.test.ts` 和 `apps/server/src/botRunner.ts` 中传入 `biddingStage` 的改动。

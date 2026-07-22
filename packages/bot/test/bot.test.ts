@@ -38,6 +38,51 @@ const cardBy = (id: string): Card => {
 };
 
 describe('decideBid', () => {
+  it('opens with the strongest high-confidence bid instead of the first weak suit', () => {
+    const hand = [
+      cardBy('S-2-0'),
+      cardBy('S-14-0'),
+      cardBy('S-13-0'),
+      cardBy('S-12-0'),
+      cardBy('S-11-0'),
+      cardBy('joker-big-0'),
+      cardBy('joker-big-1'),
+    ];
+
+    expect(decideBid({ hand, level: 2, currentBid: null, seat: 0 })).toEqual([
+      'joker-big-0',
+      'joker-big-1',
+    ]);
+  });
+
+  it('uses a single big joker to counter a single small joker', () => {
+    const currentBid = detectBid([cardBy('joker-small-0')], 2, 1);
+    expect(currentBid).not.toBeNull();
+
+    expect(
+      decideBid({
+        hand: [cardBy('joker-big-0')],
+        level: 2,
+        currentBid,
+        seat: 0,
+      }),
+    ).toEqual(['joker-big-0']);
+  });
+
+  it('does not overcall a teammate with only a same-count category upgrade', () => {
+    const currentBid = detectBid([cardBy('H-2-0'), cardBy('H-2-1')], 2, 2);
+    expect(currentBid).not.toBeNull();
+
+    expect(
+      decideBid({
+        hand: [cardBy('joker-small-0'), cardBy('joker-small-1')],
+        level: 2,
+        currentBid,
+        seat: 0,
+      }),
+    ).toBeNull();
+  });
+
   it('is always null or a legal overcall (1000 random hands)', () => {
     const suits: Suit[] = ['S', 'H', 'D', 'C'];
     for (let i = 0; i < 1000; i++) {

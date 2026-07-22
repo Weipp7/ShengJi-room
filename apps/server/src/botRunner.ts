@@ -30,6 +30,7 @@ function botAction(room: Room, seat: number): GameAction {
       level: round.level,
       currentBid: round.currentBid,
       seat,
+      biddingStage: round.biddingStage,
     });
     return cardIds ? { type: 'reveal', cardIds } : { type: 'pass' };
   }
@@ -40,6 +41,7 @@ function botAction(room: Room, seat: number): GameAction {
         level: round.level,
         currentBid: round.currentBid,
         seat,
+        biddingStage: round.biddingStage,
       });
       if (cardIds) return { type: 'reveal', cardIds };
     }
