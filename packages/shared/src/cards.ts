@@ -20,6 +20,15 @@ export type Combo = {
   strength: number;
 };
 
-export type BidKind = 'suit-single' | 'suit-pair' | 'small-joker-pair' | 'big-joker-pair';
+export type BidKind =
+  | 'suit-single'
+  | 'suit-pair'
+  | 'suit-multiple'
+  | 'small-joker-single'
+  | 'small-joker-pair'
+  | 'small-joker-multiple'
+  | 'big-joker-single'
+  | 'big-joker-pair'
+  | 'big-joker-multiple';
 
 export type Bid = { seat: number; kind: BidKind; suit: Suit | null; cards: Card[] };

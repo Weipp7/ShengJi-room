@@ -69,3 +69,13 @@
 **影响：** 新功能开发从提交后的 HEAD 开始；任何新增 bugfix 都必须对应 `ITER-xxx`。
 
 **回滚：** 可用该基线提交的父提交作为整体回滚点，或使用后续单功能提交逐项回滚。
+
+## 2026-07-22：ITER-013 亮牌强度采用张数优先
+
+**决策：** 任意张数亮牌的强度比较采用“张数优先；同张数时花色级牌 < 小王 < 大王；同张数同类别不同花色不能反”的模型。单张小王和单张大王均为无主亮牌，大王单张可以反小王单张。
+
+**原因：** 用户明确要求任意张数亮牌和大王反小王。张数优先能兼容现有单张/对子顺序，并为多副牌或测试构造的三张以上级牌保留扩展空间。
+
+**影响：** `BidKind` 扩展为 suit/small-joker/big-joker 的 single/pair/multiple；UI 按真实张数显示亮牌文案。
+
+**回滚：** 回滚 `packages/shared/src/cards.ts`、`packages/game/src/bidding.ts`、`apps/web/src/lib/contract.ts`、`apps/web/src/lib/announcements.ts`、`apps/web/src/components/ActionBar.tsx` 及对应测试即可恢复旧单张/对子模型。

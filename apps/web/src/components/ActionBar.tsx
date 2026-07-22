@@ -19,6 +19,16 @@ type Props = {
 
 const SUITS = ['S', 'H', 'D', 'C'] as const;
 
+function optionScore(option: BidOption): number {
+  const category = option.kind.startsWith('big-joker') ? 3 : option.kind.startsWith('small-joker') ? 2 : 1;
+  return option.cards.length * 10 + category;
+}
+
+function optionCountLabel(option: BidOption): string {
+  const count = option.cards.length;
+  return count === 1 ? '单' : count === 2 ? '对' : `${count}张`;
+}
+
 // 叫主花色选择器：能叫的点亮可点，不能叫的置暗；王对为无主
 function BidOptions({ view, onBid }: { view: RoomStateView; onBid: (cardIds: string[]) => void }) {
   const options = useMemo(
@@ -28,8 +38,9 @@ function BidOptions({ view, onBid }: { view: RoomStateView; onBid: (cardIds: str
   const bySuit = new Map<string, BidOption>();
   for (const o of options) {
     const key = o.suit ?? 'NT';
-    // 同槽位保留最强（availableBids 每花色已取最强；NT 取大王对优先）
-    if (!bySuit.has(key) || o.kind === 'big-joker-pair') bySuit.set(key, o);
+    // 同槽位保留最强（花色取最多张；NT 取同张数下大王优先）
+    const current = bySuit.get(key);
+    if (!current || optionScore(o) > optionScore(current)) bySuit.set(key, o);
   }
   const pick = (o: BidOption) => onBid(o.cards.map((c) => c.id));
   return (
@@ -41,11 +52,11 @@ function BidOptions({ view, onBid }: { view: RoomStateView; onBid: (cardIds: str
             key={s}
             className={`bid-option suit-btn-${s} ${opt ? 'lit' : 'dim'}`}
             disabled={!opt}
-            title={opt ? `亮${opt.kind === 'suit-pair' ? '一对' : '单张'}${SUIT_SYMBOL[s]}级牌` : '没有可亮的级牌'}
+            title={opt ? `亮${optionCountLabel(opt)}${SUIT_SYMBOL[s]}级牌` : '没有可亮的级牌'}
             onClick={() => opt && pick(opt)}
           >
             {SUIT_SYMBOL[s]}
-            {opt?.kind === 'suit-pair' && <span className="bid-pair-tag">对</span>}
+            {opt && optionCountLabel(opt) !== '单' && <span className="bid-pair-tag">{optionCountLabel(opt)}</span>}
           </button>
         );
       })}
@@ -55,11 +66,20 @@ function BidOptions({ view, onBid }: { view: RoomStateView; onBid: (cardIds: str
           <button
             className={`bid-option bid-nt ${nt ? 'lit' : 'dim'}`}
             disabled={!nt}
-            title={nt ? `${nt.kind === 'big-joker-pair' ? '大' : '小'}王对叫无主` : '没有王对'}
+            title={
+              nt
+                ? `${nt.kind.startsWith('big-joker') ? '大' : '小'}王${optionCountLabel(nt)}叫无主`
+                : '没有可亮的王'
+            }
             onClick={() => nt && pick(nt)}
           >
             王
-            {nt && <span className="bid-pair-tag">{nt.kind === 'big-joker-pair' ? '大' : '小'}</span>}
+            {nt && (
+              <span className="bid-pair-tag">
+                {nt.kind.startsWith('big-joker') ? '大' : '小'}
+                {optionCountLabel(nt)}
+              </span>
+            )}
           </button>
         );
       })()}

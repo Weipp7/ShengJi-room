@@ -1,44 +1,68 @@
-import type { Bid, BidKind, Card, Rank, Suit } from '@shengji/shared';
+import type { Bid, BidKind, Card, JokerCard, Rank, Suit } from '@shengji/shared';
 
-const BID_STRENGTH: Record<BidKind, number> = {
-  'suit-single': 1,
-  'suit-pair': 2,
-  'small-joker-pair': 3,
-  'big-joker-pair': 4,
+const kindForCount = (
+  prefix: 'suit' | 'small-joker' | 'big-joker',
+  count: number,
+): BidKind => {
+  if (count === 1) return `${prefix}-single` as BidKind;
+  if (count === 2) return `${prefix}-pair` as BidKind;
+  return `${prefix}-multiple` as BidKind;
 };
 
-// 识别亮牌：单张/一对级牌，或王对；非法返回 null
-export function detectBid(cards: Card[], level: Rank, seat: number): Bid | null {
-  if (cards.length === 1) {
-    const card = cards[0];
-    if (card.kind !== 'suit' || card.rank !== level) return null;
-    return { seat, kind: 'suit-single', suit: card.suit, cards };
-  }
-  if (cards.length === 2) {
-    const [a, b] = cards;
-    if (a.kind === 'joker' && b.kind === 'joker' && a.joker === b.joker) {
-      return { seat, kind: a.joker === 'big' ? 'big-joker-pair' : 'small-joker-pair', suit: null, cards };
-    }
-    if (
-      a.kind === 'suit' &&
-      b.kind === 'suit' &&
-      a.rank === level &&
-      b.rank === level &&
-      a.suit === b.suit
-    ) {
-      return { seat, kind: 'suit-pair', suit: a.suit, cards };
-    }
+function bidCategory(bid: Pick<Bid, 'kind'>): number {
+  if (bid.kind.startsWith('big-joker')) return 3;
+  if (bid.kind.startsWith('small-joker')) return 2;
+  return 1;
+}
+
+function bidStrength(bid: Bid): number {
+  return bid.cards.length * 10 + bidCategory(bid);
+}
+
+function sameSuitLevelCards(cards: Card[], level: Rank): { suit: Suit; cards: Card[] } | null {
+  const [first] = cards;
+  if (first?.kind !== 'suit' || first.rank !== level) return null;
+  if (cards.every((card) => card.kind === 'suit' && card.rank === level && card.suit === first.suit)) {
+    return { suit: first.suit, cards };
   }
   return null;
 }
 
-// 反主：强度必须严格更高（同强度不同花色也不可反）
-export function bidBeats(candidate: Bid, current: Bid | null): boolean {
-  if (current === null) return true;
-  return BID_STRENGTH[candidate.kind] > BID_STRENGTH[current.kind];
+function sameJokers(cards: Card[]): { joker: JokerCard['joker']; cards: Card[] } | null {
+  const [first] = cards;
+  if (first?.kind !== 'joker') return null;
+  if (cards.every((card) => card.kind === 'joker' && card.joker === first.joker)) {
+    return { joker: first.joker, cards };
+  }
+  return null;
 }
 
-// 王对 → 无主局
+// 识别亮牌：任意张同花色级牌，或任意张同类王；非法返回 null
+export function detectBid(cards: Card[], level: Rank, seat: number): Bid | null {
+  if (cards.length === 0) return null;
+  const suitBid = sameSuitLevelCards(cards, level);
+  if (suitBid !== null) return { seat, kind: kindForCount('suit', cards.length), suit: suitBid.suit, cards };
+
+  const jokerBid = sameJokers(cards);
+  if (jokerBid !== null) {
+    return {
+      seat,
+      kind: kindForCount(jokerBid.joker === 'big' ? 'big-joker' : 'small-joker', cards.length),
+      suit: null,
+      cards,
+    };
+  }
+
+  return null;
+}
+
+// 反主：强度必须严格更高。张数优先；同张数下 花色级牌 < 小王 < 大王。
+export function bidBeats(candidate: Bid, current: Bid | null): boolean {
+  if (current === null) return true;
+  return bidStrength(candidate) > bidStrength(current);
+}
+
+// 王亮牌 → 无主局
 export function trumpSuitOfBid(bid: Bid): Suit | null {
   return bid.suit;
 }
@@ -50,16 +74,15 @@ export function availableBids(hand: Card[], level: Rank, current: Bid | null): B
   const options: BidOption[] = [];
   for (const suit of ['S', 'H', 'D', 'C'] as Suit[]) {
     const levels = hand.filter((c) => c.kind === 'suit' && c.suit === suit && c.rank === level);
-    if (levels.length >= 2) options.push({ kind: 'suit-pair', suit, cards: levels.slice(0, 2) });
-    else if (levels.length === 1) options.push({ kind: 'suit-single', suit, cards: levels });
+    if (levels.length > 0) options.push({ kind: kindForCount('suit', levels.length), suit, cards: levels });
   }
   for (const j of ['small', 'big'] as const) {
     const jokers = hand.filter((c) => c.kind === 'joker' && c.joker === j);
-    if (jokers.length >= 2) {
+    if (jokers.length > 0) {
       options.push({
-        kind: j === 'big' ? 'big-joker-pair' : 'small-joker-pair',
+        kind: kindForCount(j === 'big' ? 'big-joker' : 'small-joker', jokers.length),
         suit: null,
-        cards: jokers.slice(0, 2),
+        cards: jokers,
       });
     }
   }

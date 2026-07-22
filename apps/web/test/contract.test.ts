@@ -46,6 +46,20 @@ const pairBid: Bid = {
   cards: [c('H', 2, 0), c('H', 2, 1)],
 };
 
+const tripleBid: Bid = {
+  seat: 1,
+  kind: 'suit-multiple',
+  suit: 'S',
+  cards: [c('S', 2, 0), c('S', 2, 1), c('S', 2, 2)],
+};
+
+const bigJokerSingle: Bid = {
+  seat: 0,
+  kind: 'big-joker-single',
+  suit: null,
+  cards: [{ id: 'big-0', kind: 'joker', joker: 'big' }],
+};
+
 describe('describeContract', () => {
   it('describes pending bidding state before anyone reveals', () => {
     const summary = describeContract(mkView({}));
@@ -102,6 +116,27 @@ describe('describeContract', () => {
     expect(summary.detail).toContain('机器人3 反主 ♥2 一对');
     expect(summary.detail).toContain('压过 你 ♠2 单张');
     expect(summary.detail).toContain('主 ♥');
+  });
+
+  it('describes arbitrary-count suit bids and single joker bids', () => {
+    const tripleSummary = describeContract(
+      mkView({
+        currentBid: tripleBid,
+        trump: { trumpSuit: 'S', level: 2 },
+        dealerSeat: 1,
+      }),
+    );
+    expect(tripleSummary.detail).toContain('机器人2 亮主 ♠2 3张');
+
+    const jokerSummary = describeContract(
+      mkView({
+        currentBid: bigJokerSingle,
+        trump: { trumpSuit: null, level: 2 },
+        dealerSeat: 0,
+      }),
+    );
+    expect(jokerSummary.detail).toContain('你 亮主 大王单张');
+    expect(jokerSummary.detail).toContain('本局无主');
   });
 
   it('describes no-bid fallback dealer and no-trump contract', () => {

@@ -1,5 +1,6 @@
 import type { Bid, Card, RoomStateView } from '@shengji/shared';
 import { rankText, SUIT_SYMBOL } from './format';
+import { bidLabel } from './contract';
 
 export type Announcement = {
   id: string;
@@ -12,15 +13,6 @@ function seatName(view: RoomStateView, seat: number | null): string {
   if (seat === null) return '';
   if (seat === view.yourSeat) return '你';
   return view.seats[seat]?.nickname ?? `座位${seat + 1}`;
-}
-
-// 「♠2 单张 / ♥2 一对 / 大王对」这类叫主内容描述
-function bidText(bid: Bid, level: number): string {
-  if (bid.kind === 'big-joker-pair') return '大王对';
-  if (bid.kind === 'small-joker-pair') return '小王对';
-  const suit = bid.suit ? SUIT_SYMBOL[bid.suit] : '';
-  const rank = rankText(level as Parameters<typeof rankText>[0]);
-  return `${suit}${rank} ${bid.kind === 'suit-pair' ? '一对' : '单张'}`;
 }
 
 function suitText(suit: Bid['suit']): string {
@@ -56,13 +48,13 @@ function bidAnnouncement(
     ? {
         id: `bid-${index}-${bid.seat}-${bid.kind}-${bid.suit ?? 'NT'}`,
         kind: 'bid',
-        text: `${who} 亮主 ${bidText(bid, level)}，${trumpChangeText(null, bid, level)}`,
+        text: `${who} 亮主 ${bidLabel(bid, level)}，${trumpChangeText(null, bid, level)}`,
         cards: bid.cards,
       }
     : {
         id: `counter-${index}-${bid.seat}-${bid.kind}-${bid.suit ?? 'NT'}`,
         kind: 'counter',
-        text: `${who} 反主！${bidText(bid, level)} 压过 ${bidText(previousBid, level)}，${trumpChangeText(previousBid, bid, level)}`,
+        text: `${who} 反主！${bidLabel(bid, level)} 压过 ${bidLabel(previousBid, level)}，${trumpChangeText(previousBid, bid, level)}`,
         cards: bid.cards,
       };
 }

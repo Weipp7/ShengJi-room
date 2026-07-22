@@ -20,10 +20,12 @@ function trumpName(view: RoomStateView): string {
 }
 
 export function bidLabel(bid: Bid, level: number): string {
-  if (bid.kind === 'big-joker-pair') return '大王对';
-  if (bid.kind === 'small-joker-pair') return '小王对';
+  const count = bid.cards.length;
+  const countText = count === 1 ? '单张' : count === 2 ? '一对' : `${count}张`;
+  if (bid.kind.startsWith('big-joker')) return `大王${countText}`;
+  if (bid.kind.startsWith('small-joker')) return `小王${countText}`;
   const suit = bid.suit ? SUIT_SYMBOL[bid.suit] : '';
-  return `${suit}${rankText(level as Parameters<typeof rankText>[0])} ${bid.kind === 'suit-pair' ? '一对' : '单张'}`;
+  return `${suit}${rankText(level as Parameters<typeof rankText>[0])} ${countText}`;
 }
 
 export function describeContract(view: RoomStateView): ContractSummary {

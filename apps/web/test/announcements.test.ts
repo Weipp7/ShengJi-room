@@ -45,6 +45,14 @@ function mkView(partial: Partial<RoomStateView>): RoomStateView {
 const singleBid: Bid = { seat: 1, kind: 'suit-single', suit: 'S', cards: [c('S', 2, 0)] };
 const pairBid: Bid = { seat: 2, kind: 'suit-pair', suit: 'H', cards: [c('H', 2, 0), c('H', 2, 1)] };
 const ntBid: Bid = { seat: 0, kind: 'big-joker-pair', suit: null, cards: [joker('big', 0), joker('big', 1)] };
+const tripleBid: Bid = {
+  seat: 1,
+  kind: 'suit-multiple',
+  suit: 'S',
+  cards: [c('S', 2, 0), c('S', 2, 1), c('S', 2, 2)],
+};
+const smallJokerSingle: Bid = { seat: 1, kind: 'small-joker-single', suit: null, cards: [joker('small', 0)] };
+const bigJokerSingle: Bid = { seat: 0, kind: 'big-joker-single', suit: null, cards: [joker('big', 0)] };
 
 describe('deriveAnnouncements', () => {
   it('no events when prev is null (initial join / reconnect)', () => {
@@ -115,6 +123,24 @@ describe('deriveAnnouncements', () => {
     expect(events[0].kind).toBe('counter');
     expect(events[0].text).toContain('无主');
     expect(events[0].text).toContain('主从 ♥ 改为无主');
+  });
+
+  it('multi-card suit reveal announces the exposed card count', () => {
+    const events = deriveAnnouncements(mkView({}), mkView({ currentBid: tripleBid }));
+    expect(events[0].text).toContain('亮主');
+    expect(events[0].text).toContain('♠2 3张');
+    expect(events[0].cards).toEqual(tripleBid.cards);
+  });
+
+  it('single big joker counter announces big joker over small joker', () => {
+    const events = deriveAnnouncements(
+      mkView({ currentBid: smallJokerSingle }),
+      mkView({ currentBid: bigJokerSingle }),
+    );
+    expect(events[0].kind).toBe('counter');
+    expect(events[0].text).toContain('大王单张');
+    expect(events[0].text).toContain('压过 小王单张');
+    expect(events[0].text).toContain('主仍是 无主');
   });
 
   it('derives every reveal/counter from bid history when snapshots skip intermediate states', () => {

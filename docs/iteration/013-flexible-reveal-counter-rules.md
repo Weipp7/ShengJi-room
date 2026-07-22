@@ -10,7 +10,7 @@ P0
 
 ## 当前状态
 
-Ready
+Done
 
 ## 背景
 
@@ -75,4 +75,15 @@ Ready
 
 ## 执行记录
 
-尚未开始。
+2026-07-22：
+
+- 进入实现阶段，先补规则层失败测试。
+- 本轮规则决策：亮牌强度先按张数比较，张数相同时按 `花色级牌 < 小王 < 大王` 比较；同张数同类别不同花色仍不能反。
+- 暂不引入庄前/庄后反牌 phase，本项只扩展亮牌识别、强度比较、候选生成和 UI 文案兼容。
+- RED：`pnpm test packages/game/test/bidding.test.ts` 失败 6 项，失败点为单张王、多张级牌、候选生成和强度比较缺失。
+- GREEN：扩展 `BidKind`、`detectBid`、`bidBeats`、`availableBids` 后，`pnpm test packages/game/test/bidding.test.ts` 通过 15 项。
+- UI RED：`pnpm test apps/web/test/announcements.test.ts apps/web/test/contract.test.ts` 失败 3 项，旧文案把 `suit-multiple` 和单张王显示成“单张级牌”。
+- UI GREEN：公告和契约摘要统一使用新 bid label，目标 UI 测试通过 20 项。
+- 全量验证：`pnpm test` 通过 20 个测试文件、151 个测试；`pnpm typecheck` 通过；`pnpm build` 通过。
+- 浏览器验证：创建机器人局后，叫主阶段显示 `王 大单` 按钮；点击后契约摘要显示 `你 亮主 大王单张，本局无主，级牌 2，庄家 你`，公告显示 `你 亮主 大王单张，主仍是 无主，级牌 2 不变`。
+- 浏览器截图：`docs/iteration/013-browser-big-joker-single.png`。
