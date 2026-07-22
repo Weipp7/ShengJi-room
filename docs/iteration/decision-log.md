@@ -129,3 +129,13 @@
 **影响：** `decideBury(hand, trump)` 保持外部调用方式不变，内部通过主牌数量和关键主控估算庄家强弱。弱庄更保守，强庄更愿意在补牌安全时制造短门。`explainBury` 只在 bot 包层暴露策略解释，不改变服务端状态机，也不会让玩家 UI 看到隐藏底牌。
 
 **回滚：** 回滚 `packages/bot/src/bury.ts` 中 `DealerProfile`、`BuryCandidate`、`explainBury`、低风险补牌门槛和对应 `packages/bot/test/bot.test.ts` 用例，即可恢复上一版候选评分。
+
+## 2026-07-22：ITER-012 出牌策略先做可解释的局部评估
+
+**决策：** 新增 `explainPlay(view) -> { cardIds, reason }` 作为 bot 出牌解释接口，`decidePlay` 保持原返回值。第一版只基于当前手牌、当前墩、队友/敌方领先、分牌和有效花色做局部评估，不做长期记牌、主动甩牌或概率模型。
+
+**原因：** 用户目标同时包含高级 bot 和后续出牌提示按钮。先把推荐理由沉淀在 bot 包内，可以让测试直接验证“为什么出这手”，也能避免 UI 提示阶段重新实现一套策略。
+
+**影响：** bot 领牌会优先保留组合，跟牌会在有分可抢时用最小可赢组合，队友领先时送分并省控制牌。`throw-pairs` 跟牌仍遵循当前规则中“领出者固定赢”，不设计反甩。
+
+**回滚：** 回滚 `packages/bot/src/play.ts` 的 `explainPlay`、`PlayReason`、组合排序 helper 和对应 `packages/bot/test/bot.test.ts` 用例；`decidePlay` 可恢复为直接返回原 `decideLead/decideFollow` 结果。

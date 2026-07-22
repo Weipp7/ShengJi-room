@@ -10,11 +10,12 @@ import {
   detectBid,
   bidBeats,
   detectCombo,
+  countPoints,
   shuffle,
   type RoundState,
   type StepResult,
 } from '@shengji/game';
-import { decideBid, decideBury, decidePlay, explainBury } from '../src/index';
+import { decideBid, decideBury, decidePlay, explainBury, explainPlay } from '../src/index';
 
 function mulberry32(seed: number): () => number {
   let a = seed >>> 0;
@@ -263,19 +264,42 @@ describe('decidePlay', () => {
       while (s.phase === 'playing' && guard++ < 500) {
         const seat = s.turnSeat;
         const leadCombo = s.currentTrick.length > 0 ? s.currentTrick[0].combo : null;
-        const ids = decidePlay({
+        const plan = explainPlay({
           hand: s.hands[seat],
           trump: s.trump,
           leadCombo,
           currentTrick: s.currentTrick,
           seat,
-          trickPointsSoFar: 0,
+          trickPointsSoFar: countPoints(s.currentTrick.flatMap((p) => p.cards)),
         });
-        s = expectOk(applyPlay(s, seat, ids));
+        expect(plan.reason).not.toBe('fallback');
+        s = expectOk(applyPlay(s, seat, plan.cardIds));
       }
       expect(s.phase).toBe('scoring');
       expect(s.result).not.toBeNull();
     }
+  });
+
+  it('lead: preserves tractor shape when a safe low single is available', () => {
+    const trump: TrumpContext = { trumpSuit: 'H', level: 2 };
+    const plan = explainPlay({
+      hand: [
+        cardBy('S-7-0'),
+        cardBy('S-7-1'),
+        cardBy('S-8-0'),
+        cardBy('S-8-1'),
+        cardBy('C-3-0'),
+        cardBy('D-5-0'),
+      ],
+      trump,
+      leadCombo: null,
+      currentTrick: [],
+      seat: 0,
+      trickPointsSoFar: 0,
+    });
+
+    expect(plan.cardIds).toEqual(['C-3-0']);
+    expect(plan.reason).toBe('lead-preserve-shape-single');
   });
 
   it('teammate winning: dumps point card', () => {
@@ -310,6 +334,156 @@ describe('decidePlay', () => {
     expect(ids).toEqual(['S-6-0']); // 不送分
   });
 
+  it('opponent winning with points: uses the smallest winning single instead of spending the ace', () => {
+    const trump: TrumpContext = { trumpSuit: 'H', level: 2 };
+    const lead = [cardBy('S-10-0')];
+    const plan = explainPlay({
+      hand: [cardBy('S-11-0'), cardBy('S-13-0'), cardBy('S-14-0')],
+      trump,
+      leadCombo: detectCombo(lead, trump),
+      currentTrick: [{ seat: 0, cards: lead, combo: detectCombo(lead, trump) }],
+      seat: 1,
+      trickPointsSoFar: 10,
+    });
+
+    expect(plan.cardIds).toEqual(['S-11-0']);
+    expect(plan.reason).toBe('win-points-minimal');
+  });
+
+  it('void in lead suit with points: trumps with the cheapest trump single', () => {
+    const trump: TrumpContext = { trumpSuit: 'H', level: 2 };
+    const lead = [cardBy('S-10-0')];
+    const plan = explainPlay({
+      hand: [cardBy('H-3-0'), cardBy('H-14-0'), cardBy('D-3-0')],
+      trump,
+      leadCombo: detectCombo(lead, trump),
+      currentTrick: [{ seat: 0, cards: lead, combo: detectCombo(lead, trump) }],
+      seat: 1,
+      trickPointsSoFar: 10,
+    });
+
+    expect(plan.cardIds).toEqual(['H-3-0']);
+    expect(plan.reason).toBe('trump-points-minimal');
+  });
+
+  it('pair with points: uses the smallest winning pair instead of the ace pair', () => {
+    const trump: TrumpContext = { trumpSuit: 'H', level: 2 };
+    const lead = [cardBy('S-10-0'), cardBy('S-10-1')];
+    const plan = explainPlay({
+      hand: [
+        cardBy('S-11-0'), cardBy('S-11-1'),
+        cardBy('S-13-0'), cardBy('S-13-1'),
+        cardBy('S-14-0'), cardBy('S-14-1'),
+      ],
+      trump,
+      leadCombo: detectCombo(lead, trump),
+      currentTrick: [{ seat: 0, cards: lead, combo: detectCombo(lead, trump) }],
+      seat: 1,
+      trickPointsSoFar: 20,
+    });
+
+    expect(plan.cardIds).toEqual(['S-11-0', 'S-11-1']);
+    expect(plan.reason).toBe('win-points-minimal');
+  });
+
+  it('pair with no points: keeps control pairs instead of winning a small trick', () => {
+    const trump: TrumpContext = { trumpSuit: 'H', level: 2 };
+    const lead = [cardBy('S-9-0'), cardBy('S-9-1')];
+    const plan = explainPlay({
+      hand: [
+        cardBy('S-3-0'), cardBy('S-3-1'),
+        cardBy('S-11-0'), cardBy('S-11-1'),
+        cardBy('S-14-0'), cardBy('S-14-1'),
+      ],
+      trump,
+      leadCombo: detectCombo(lead, trump),
+      currentTrick: [{ seat: 0, cards: lead, combo: detectCombo(lead, trump) }],
+      seat: 1,
+      trickPointsSoFar: 0,
+    });
+
+    expect(plan.cardIds).toEqual(['S-3-0', 'S-3-1']);
+    expect(plan.reason).toBe('preserve-control');
+  });
+
+  it('tractor with points: uses the smallest winning tractor', () => {
+    const trump: TrumpContext = { trumpSuit: 'H', level: 2 };
+    const lead = [cardBy('S-5-0'), cardBy('S-5-1'), cardBy('S-6-0'), cardBy('S-6-1')];
+    const plan = explainPlay({
+      hand: [
+        cardBy('S-7-0'), cardBy('S-7-1'), cardBy('S-8-0'), cardBy('S-8-1'),
+        cardBy('S-12-0'), cardBy('S-12-1'), cardBy('S-13-0'), cardBy('S-13-1'),
+      ],
+      trump,
+      leadCombo: detectCombo(lead, trump),
+      currentTrick: [{ seat: 0, cards: lead, combo: detectCombo(lead, trump) }],
+      seat: 1,
+      trickPointsSoFar: 20,
+    });
+
+    expect(plan.cardIds).toEqual(['S-7-0', 'S-7-1', 'S-8-0', 'S-8-1']);
+    expect(plan.reason).toBe('win-points-minimal');
+  });
+
+  it('teammate winning a tractor: saves the higher tractor and sends points', () => {
+    const trump: TrumpContext = { trumpSuit: 'H', level: 2 };
+    const lead = [cardBy('S-13-0'), cardBy('S-13-1'), cardBy('S-14-0'), cardBy('S-14-1')];
+    const plan = explainPlay({
+      hand: [
+        cardBy('S-5-0'), cardBy('S-5-1'), cardBy('S-6-0'), cardBy('S-6-1'),
+        cardBy('S-11-0'), cardBy('S-11-1'), cardBy('S-12-0'), cardBy('S-12-1'),
+      ],
+      trump,
+      leadCombo: detectCombo(lead, trump),
+      currentTrick: [{ seat: 0, cards: lead, combo: detectCombo(lead, trump) }],
+      seat: 2,
+      trickPointsSoFar: 20,
+    });
+
+    expect(plan.cardIds).toEqual(['S-5-0', 'S-5-1', 'S-6-0', 'S-6-1']);
+    expect(plan.reason).toBe('support-teammate');
+  });
+
+  it('void in pair lead with points: trumps with the cheapest trump pair', () => {
+    const trump: TrumpContext = { trumpSuit: 'H', level: 2 };
+    const lead = [cardBy('S-10-0'), cardBy('S-10-1')];
+    const plan = explainPlay({
+      hand: [
+        cardBy('H-3-0'), cardBy('H-3-1'),
+        cardBy('H-14-0'), cardBy('H-14-1'),
+        cardBy('D-3-0'), cardBy('D-4-0'),
+      ],
+      trump,
+      leadCombo: detectCombo(lead, trump),
+      currentTrick: [{ seat: 0, cards: lead, combo: detectCombo(lead, trump) }],
+      seat: 1,
+      trickPointsSoFar: 20,
+    });
+
+    expect(plan.cardIds).toEqual(['H-3-0', 'H-3-1']);
+    expect(plan.reason).toBe('trump-points-minimal');
+  });
+
+  it('void in tractor lead with points: trumps with the cheapest trump tractor', () => {
+    const trump: TrumpContext = { trumpSuit: 'H', level: 2 };
+    const lead = [cardBy('S-5-0'), cardBy('S-5-1'), cardBy('S-6-0'), cardBy('S-6-1')];
+    const plan = explainPlay({
+      hand: [
+        cardBy('H-3-0'), cardBy('H-3-1'), cardBy('H-4-0'), cardBy('H-4-1'),
+        cardBy('H-13-0'), cardBy('H-13-1'), cardBy('H-14-0'), cardBy('H-14-1'),
+        cardBy('D-3-0'), cardBy('D-4-0'), cardBy('D-6-0'), cardBy('D-7-0'),
+      ],
+      trump,
+      leadCombo: detectCombo(lead, trump),
+      currentTrick: [{ seat: 0, cards: lead, combo: detectCombo(lead, trump) }],
+      seat: 1,
+      trickPointsSoFar: 20,
+    });
+
+    expect(plan.cardIds).toEqual(['H-3-0', 'H-3-1', 'H-4-0', 'H-4-1']);
+    expect(plan.reason).toBe('trump-points-minimal');
+  });
+
   it('follows a throw-pairs lead with as many required pairs as possible', () => {
     const trump: TrumpContext = { trumpSuit: 'H', level: 2 };
     const leadCards = [cardBy('S-9-0'), cardBy('S-9-1'), cardBy('S-12-0'), cardBy('S-12-1')];
@@ -330,5 +504,59 @@ describe('decidePlay', () => {
     });
 
     expect(ids).toEqual(['S-3-0', 'S-3-1', 'S-4-0', 'S-7-0']);
+  });
+
+  it('follows opponent throw-pairs with the lowest required pairs, independent of hand order', () => {
+    const trump: TrumpContext = { trumpSuit: 'H', level: 2 };
+    const leadCards = [cardBy('S-9-0'), cardBy('S-9-1'), cardBy('S-12-0'), cardBy('S-12-1')];
+    const leadCombo = {
+      type: 'throw-pairs' as const,
+      cards: leadCards,
+      suit: 'S' as const,
+      strength: 12,
+      components: [detectCombo([cardBy('S-9-0'), cardBy('S-9-1')], trump)!],
+    };
+    const plan = explainPlay({
+      hand: [
+        cardBy('S-14-0'), cardBy('S-14-1'),
+        cardBy('S-3-0'), cardBy('S-3-1'),
+        cardBy('S-4-0'), cardBy('S-4-1'),
+      ],
+      trump,
+      leadCombo,
+      currentTrick: [{ seat: 0, cards: leadCards, combo: leadCombo }],
+      seat: 1,
+      trickPointsSoFar: 0,
+    });
+
+    expect(plan.cardIds).toEqual(['S-3-0', 'S-3-1', 'S-4-0', 'S-4-1']);
+    expect(plan.reason).toBe('follow-throw-pairs');
+  });
+
+  it('follows teammate throw-pairs by sending points while saving the ace pair', () => {
+    const trump: TrumpContext = { trumpSuit: 'H', level: 2 };
+    const leadCards = [cardBy('S-9-0'), cardBy('S-9-1'), cardBy('S-12-0'), cardBy('S-12-1')];
+    const leadCombo = {
+      type: 'throw-pairs' as const,
+      cards: leadCards,
+      suit: 'S' as const,
+      strength: 12,
+      components: [detectCombo([cardBy('S-9-0'), cardBy('S-9-1')], trump)!],
+    };
+    const plan = explainPlay({
+      hand: [
+        cardBy('S-14-0'), cardBy('S-14-1'),
+        cardBy('S-3-0'), cardBy('S-3-1'),
+        cardBy('S-5-0'), cardBy('S-5-1'),
+      ],
+      trump,
+      leadCombo,
+      currentTrick: [{ seat: 0, cards: leadCards, combo: leadCombo }],
+      seat: 2,
+      trickPointsSoFar: 20,
+    });
+
+    expect(plan.cardIds).toEqual(['S-5-0', 'S-5-1', 'S-3-0', 'S-3-1']);
+    expect(plan.reason).toBe('follow-throw-pairs');
   });
 });

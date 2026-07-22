@@ -1,5 +1,52 @@
 # Iteration Review Notes
 
+## 2026-07-22：ITER-012 高级机器人领牌与跟牌策略评审
+
+### 产品经理 / 真实玩家体验官
+
+- 发现：第一小闭环应聚焦高频单张跟牌、断门杀分、队友送分和领牌保形，不应直接做长期记牌或主动甩牌。
+  - 采纳：优先实现单张、对子、拖拉机的局部评估；领牌优先安全散单保形。
+- 发现：bot 为 0 分小墩浪费 A 或大主会明显破坏真人感。
+  - 采纳：只有敌方当前领先且本墩已有分时才争抢；争抢时使用最小可赢组合。
+
+### 规则专家 / 对抗评审
+
+- 发现：有效花色和牌面花色不同，级牌、王、无主局级牌都必须走主牌规则。
+  - 采纳：所有选择都通过 `effectiveSuit`、`findPairs`、`findTractors` 和 `validateFollow` 兜底。
+- 发现：`throw-pairs` 当前由领出者固定赢，跟牌不能制造“反甩赢牌”错觉。
+  - 采纳：`throw-pairs` 只做稳定跟牌排序，不尝试用主对反赢。
+- 发现：断门杀牌不能用散牌伪装赢墩。
+  - 采纳：断门杀分只选择完整主单张、主对子或主拖拉机。
+
+### QA 测试工程师
+
+- 采纳 P0：
+  - 单张有分用最小可赢牌；
+  - 对子有分用最小可赢对；
+  - 对子无分省控制对；
+  - 拖拉机有分用最小可赢拖拉机；
+  - 队友领先拖拉机时送分并保留高拖拉机。
+- 采纳 P1：
+  - 断门对子有分用最小主对杀；
+  - 断门拖拉机有分用最小主拖拉机杀；
+  - 敌方/队友 `throw-pairs` 跟牌不再受手牌顺序影响。
+- 未完全采纳：主动甩牌策略、复杂剩余牌推断和出牌提示 UI，分别留给后续 bot/提示专项。
+
+### Release Reviewer
+
+- 回滚建议：按 ITER-012 单提交回滚；手工回滚重点是 `packages/bot/src/play.ts`、`packages/bot/src/index.ts` 和 `packages/bot/test/bot.test.ts`。
+- 剩余风险：策略仍是局部启发式；没有浏览器固定牌序 E2E，已由 `ITER-002` 跟踪。
+
+### 代码审查
+
+- Critical：无。
+- Important：随机 bot-vs-bot smoke 一度传入固定 `trickPointsSoFar: 0`，与生产 `botRunner` 按当前墩真实分牌传参不一致。
+  - 已修复：测试改用 `countPoints(currentTrick.cards)`，并断言 `explainPlay` 不回落到 `fallback`。
+- Minor：`PlayReason` 存在未使用的 `follow-pair`，且队友领先/省控制场景的解释不够准确。
+  - 已修复：删除未使用 reason，改用 `support-teammate` 和 `preserve-control`。
+- Minor：测试报告里 `pnpm test -- packages/bot/test/bot.test.ts` 与单文件无缓存命令的执行范围容易混淆。
+  - 已修复：报告明确区分当前 Vitest 配置下的全量执行结果和 `--no-cache` 单文件结果。
+
 ## 2026-07-22：ITER-011 机器人埋牌策略代码评审
 
 ### 对抗评审 / 规则专家

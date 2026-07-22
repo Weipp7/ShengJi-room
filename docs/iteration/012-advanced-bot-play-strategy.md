@@ -10,7 +10,7 @@ P1
 
 ## 当前状态
 
-Backlog
+Done
 
 ## 背景
 
@@ -74,4 +74,66 @@ Backlog
 
 ## 执行记录
 
-尚未开始。
+2026-07-22 启动实现。第一小闭环限定为：
+
+- 跟单张时，敌方当前领先且本墩已有分牌时，优先用最小可赢牌争抢，而不是直接用最大牌。
+- 队友当前领先时继续保留控制牌，必要时垫分。
+- 对子、拖拉机跟牌采用同样原则：有分才用最小可赢牌型争抢，无分或队友领先时省控制/送分。
+- 断门且敌方有分时，只用完整主单张、主对子或主拖拉机杀分，不用散牌伪装赢墩。
+- `throw-pairs` 跟牌不尝试“反甩赢牌”，只稳定满足对子数量，并按队友/敌方领先选择送分或省控制。
+- 不在本轮实现出牌提示按钮 UI，不引入长期记牌或概率模型。
+
+## 实现结果
+
+- `packages/bot/src/play.ts`
+  - 新增 `explainPlay(view) -> { cardIds, reason }`，`decidePlay` 保持原 API 并复用解释结果。
+  - 领牌优先选择非主、无分、非对子成员的安全散单，避免开局自动暴露拖拉机或强对子。
+  - 单张、对子、拖拉机跟牌在敌方当前领先且墩中有分时，选择最小可赢组合争抢。
+  - 队友当前领先时，组合选择按送分和省控制排序。
+  - 断门杀分只从完整主牌型中选最小可赢组合，保持 `validateFollow` 和 `trickWinner` 规则一致。
+  - `throw-pairs` 跟牌从手牌顺序改为按策略排序选对子，避免高对无谓消耗。
+- `packages/bot/src/index.ts`
+  - 导出 `explainPlay`、`PlayPlan`、`PlayReason`，为后续 `ITER-015` 出牌提示按钮复用。
+
+## 测试记录
+
+### 红测
+
+- `pnpm test -- packages/bot/test/bot.test.ts`
+  - 失败：`opponent winning with points: uses the smallest winning single instead of spending the ace`，旧实现直接出 `S-A`。
+- `pnpm test -- packages/bot/test/bot.test.ts`
+  - 失败：`void in lead suit with points: trumps with the cheapest trump single`，旧实现垫 `D-3` 放分。
+- `pnpm test -- packages/bot/test/bot.test.ts`
+  - 失败：`lead: preserves tractor shape when a safe low single is available`，旧实现直接领出拖拉机。
+- `pnpm test -- packages/bot/test/bot.test.ts`
+  - 失败：对子/拖拉机 P0 场景 4 项，旧实现用最大对子/最大拖拉机争抢或跟队友。
+- `pnpm test -- packages/bot/test/bot.test.ts`
+  - 失败：断门对子/拖拉机杀分和 `throw-pairs` 跟牌排序 4 项，旧实现垫低副牌或按手牌顺序浪费高对。
+
+### 当前验证
+
+- `pnpm test -- packages/bot/test/bot.test.ts`
+  - 通过：当前 Vitest 配置下执行 23 个测试文件，198 个测试。
+- `pnpm test packages/bot/test/bot.test.ts --no-cache`
+  - 通过：1 个测试文件，25 个测试。
+- `pnpm test packages/game/test/follow.test.ts packages/game/test/trick.test.ts apps/server/test/gameFlow.test.ts`
+  - 通过：3 个测试文件，26 个测试。
+- `pnpm test`
+  - 通过：23 个测试文件，198 个测试。
+- `pnpm typecheck`
+  - 通过：`pnpm -r exec tsc --noEmit` 无错误。
+- `pnpm build`
+  - 通过：shared/game/bot/web/server 均构建成功。
+
+## 多角色评审记录
+
+- 产品经理 / 真实玩家体验官：第一闭环聚焦最常见的出牌感知问题：抢分时节制用牌、队友领先时送分、省高牌、领牌保形。
+- 规则专家：杀牌只在断门且具备完整主牌型时发生；`throw-pairs` 当前规则由领出者固定赢，因此跟牌策略不制造“反甩赢牌”错觉。
+- QA / 对抗评审：采纳 P0 的对子/拖拉机最小可赢和队友省控制；采纳 P1 的断门对子/拖拉机杀分和 throw-pairs 稳定跟牌；P2 的复杂降级对子只做排序稳定，不新增独立验收项。
+- 代码审查：修复随机 bot-vs-bot smoke 使用固定 `trickPointsSoFar: 0` 的问题，改为按当前墩真实分牌计算；同时断言策略不落入 `fallback`。清理未使用的 reason，并把队友领先/省控制场景的解释改为 `support-teammate` 和 `preserve-control`。
+
+## 未处理事项
+
+- 不做主动甩牌策略，避免 bot 使用全知信息触发失败惩罚。
+- 不做长期记牌、概率模型、剩余主牌推断。
+- 不做出牌提示 UI；`explainPlay` 只作为后续提示复用的策略接口。

@@ -48,3 +48,55 @@
 - `docs/iteration/013-browser-big-joker-single.png`
 
 仓库内可重复 E2E 仍由 `ITER-002` 跟踪。
+
+## ITER-012 高级机器人领牌与跟牌策略升级
+
+### 红测记录
+
+- 命令：`pnpm test -- packages/bot/test/bot.test.ts`
+- 结果：失败，`opponent winning with points: uses the smallest winning single instead of spending the ace` 收到 `S-14`，期望 `S-11`。
+- 结论：旧单张策略会直接用最大牌抢分，浪费控制牌。
+
+- 命令：`pnpm test -- packages/bot/test/bot.test.ts`
+- 结果：失败，`void in lead suit with points: trumps with the cheapest trump single` 收到 `D-3`，期望 `H-3`。
+- 结论：旧断门策略只垫低牌，不会用小主杀分。
+
+- 命令：`pnpm test -- packages/bot/test/bot.test.ts`
+- 结果：失败，`lead: preserves tractor shape when a safe low single is available` 收到整组拖拉机，期望安全散单 `C-3`。
+- 结论：旧领牌策略太激进，开局容易暴露或消耗组合。
+
+- 命令：`pnpm test -- packages/bot/test/bot.test.ts`
+- 结果：失败，对子/拖拉机 P0 场景 4 项。
+- 结论：旧对子/拖拉机跟牌总取最大可赢组合，且队友领先时也浪费高组合。
+
+- 命令：`pnpm test -- packages/bot/test/bot.test.ts`
+- 结果：失败，断门对子/拖拉机杀分和 `throw-pairs` 跟牌排序 4 项。
+- 结论：旧策略无法用完整主牌型杀分，且 `throw-pairs` 跟牌受手牌顺序影响。
+
+### 修复后验证
+
+- 命令：`pnpm test -- packages/bot/test/bot.test.ts`
+- 结果：通过；当前 Vitest 配置下执行 23 个测试文件，198 个测试。
+- 覆盖：单张/对子/拖拉机最小可赢、断门杀分、队友送分省控制、领牌保形、throw-pairs 稳定跟牌、完整 bot vs bot smoke。
+
+- 命令：`pnpm test packages/bot/test/bot.test.ts --no-cache`
+- 结果：通过，1 个测试文件，25 个测试。
+- 覆盖：`explainPlay` 入口导出在无缓存路径下可用。
+
+- 命令：`pnpm test packages/game/test/follow.test.ts packages/game/test/trick.test.ts apps/server/test/gameFlow.test.ts`
+- 结果：通过，3 个测试文件，26 个测试。
+- 覆盖：跟牌合法性、墩赢家判定和服务端完整牌局 smoke 未因策略变化回归。
+
+- 命令：`pnpm test`
+- 结果：通过，23 个测试文件，198 个测试。
+- 覆盖：shared/game/bot/server/web 全量单测。
+
+- 命令：`pnpm typecheck`
+- 结果：通过，`pnpm -r exec tsc --noEmit` 无错误。
+
+- 命令：`pnpm build`
+- 结果：通过，shared/game/bot/web/server 均构建成功。
+
+### 浏览器验证边界
+
+本阶段只调整 bot 决策和解释接口，不改变玩家可见 UI。真实浏览器试玩仍需要等 `ITER-002` 的确定性 E2E 基础设施落地后，把固定牌序和多客户端截图纳入仓库。

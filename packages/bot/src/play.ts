@@ -20,6 +20,26 @@ export type BotPlayView = {
   trickPointsSoFar: number;
 };
 
+export type PlayReason =
+  | 'lead-tractor'
+  | 'lead-strong-pair'
+  | 'lead-cheapest-single'
+  | 'lead-preserve-shape-single'
+  | 'follow-forced-suit'
+  | 'win-points-minimal'
+  | 'trump-points-minimal'
+  | 'preserve-control'
+  | 'support-teammate'
+  | 'avoid-points'
+  | 'follow-throw-pairs'
+  | 'follow-tractor'
+  | 'fallback';
+
+export type PlayPlan = {
+  cardIds: string[];
+  reason: PlayReason;
+};
+
 // 垫牌避分：分牌重罚，其次留强度高的牌
 const avoidScore = (c: Card, trump: TrumpContext): number =>
   cardPoints(c) * 40 + cardStrength(c, trump);
@@ -28,7 +48,62 @@ const avoidScore = (c: Card, trump: TrumpContext): number =>
 const dumpScore = (c: Card, trump: TrumpContext): number =>
   -cardPoints(c) * 40 + cardStrength(c, trump);
 
+const faceKey = (c: Card): string => (c.kind === 'joker' ? `j-${c.joker}` : `${c.suit}-${c.rank}`);
+
+function faceCounts(hand: Card[]): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const c of hand) counts.set(faceKey(c), (counts.get(faceKey(c)) ?? 0) + 1);
+  return counts;
+}
+
+function cardsStrength(cards: Card[], trump: TrumpContext): number {
+  return Math.max(...cards.map((card) => cardStrength(card, trump)));
+}
+
+function sortByStrength(cards: Card[][], trump: TrumpContext): Card[][] {
+  return [...cards].sort((a, b) => {
+    const diff = cardsStrength(a, trump) - cardsStrength(b, trump);
+    return diff !== 0 ? diff : a.map((card) => card.id).join('|').localeCompare(b.map((card) => card.id).join('|'));
+  });
+}
+
+function groupScore(cards: Card[], trump: TrumpContext, score: (card: Card, trump: TrumpContext) => number): number {
+  return cards.reduce((sum, card) => sum + score(card, trump), 0);
+}
+
+function sortByGroupScore(
+  groups: Card[][],
+  trump: TrumpContext,
+  score: (card: Card, trump: TrumpContext) => number,
+): Card[][] {
+  return [...groups].sort((a, b) => {
+    const diff = groupScore(a, trump, score) - groupScore(b, trump, score);
+    if (diff !== 0) return diff;
+    return cardsStrength(a, trump) - cardsStrength(b, trump);
+  });
+}
+
+function trumpingGroups(lead: Combo, winning: Combo, cards: Card[], trump: TrumpContext): Card[][] {
+  const trumpCards = cards.filter((card) => effectiveSuit(card, trump) === 'trump');
+  let groups: Card[][] = [];
+  if (lead.type === 'single') {
+    groups = trumpCards.map((card) => [card]);
+  } else if (lead.type === 'pair') {
+    groups = findPairs(trumpCards, trump);
+  } else if (lead.type === 'tractor') {
+    groups = findTractors(trumpCards, trump, lead.cards.length / 2);
+  }
+  return sortByStrength(groups, trump).filter((group) => {
+    if (group.length !== lead.cards.length) return false;
+    return winning.suit === 'trump' ? cardsStrength(group, trump) > winning.strength : true;
+  });
+}
+
 export function decidePlay(view: BotPlayView): string[] {
+  return explainPlay(view).cardIds;
+}
+
+export function explainPlay(view: BotPlayView): PlayPlan {
   return view.leadCombo === null ? decideLead(view) : decideFollow(view);
 }
 
@@ -43,29 +118,45 @@ function groupByEffectiveSuit(hand: Card[], trump: TrumpContext): Map<EffectiveS
   return groups;
 }
 
-function decideLead(view: BotPlayView): string[] {
+function plan(cards: Card[], reason: PlayReason): PlayPlan {
+  return { cardIds: cards.map((c) => c.id), reason };
+}
+
+function decideLead(view: BotPlayView): PlayPlan {
   const { hand, trump } = view;
   const groups = groupByEffectiveSuit(hand, trump);
+  const counts = faceCounts(hand);
+  const safeSingles = hand.filter(
+    (card) =>
+      effectiveSuit(card, trump) !== 'trump' &&
+      cardPoints(card) === 0 &&
+      (counts.get(faceKey(card)) ?? 0) < 2,
+  );
+  if (safeSingles.length > 0) {
+    const sorted = [...safeSingles].sort((a, b) => avoidScore(a, trump) - avoidScore(b, trump));
+    return plan([sorted[0]], 'lead-preserve-shape-single');
+  }
+
   // 两连对拖拉机优先领出（取最强一组）
   for (const cards of groups.values()) {
     const tractors = findTractors(cards, trump, 2);
     if (tractors.length > 0) {
-      return tractors[tractors.length - 1].map((c) => c.id);
+      return plan(tractors[tractors.length - 1], 'lead-tractor');
     }
   }
   // 大对子（副牌 A 对或主牌高强度对）领出
   for (const cards of groups.values()) {
     for (const pair of findPairs(cards, trump)) {
       const s = cardStrength(pair[0], trump);
-      if (s === 14 || s >= 114) return pair.map((c) => c.id);
+      if (s === 14 || s >= 114) return plan(pair, 'lead-strong-pair');
     }
   }
   // 最低价值单张
   const sorted = [...hand].sort((a, b) => avoidScore(a, trump) - avoidScore(b, trump));
-  return [sorted[0].id];
+  return plan([sorted[0]], 'lead-cheapest-single');
 }
 
-function decideFollow(view: BotPlayView): string[] {
+function decideFollow(view: BotPlayView): PlayPlan {
   const { hand, trump, currentTrick, seat } = view;
   const lead = view.leadCombo!;
   const n = lead.cards.length;
@@ -79,38 +170,52 @@ function decideFollow(view: BotPlayView): string[] {
     [...cards].sort((a, b) => orderScore(a, trump) - orderScore(b, trump));
 
   let play: Card[];
+  let reason: PlayReason = teammateWinning ? 'support-teammate' : 'avoid-points';
   if (suitCards.length <= n) {
     // 该花色全出 + 垫牌补足
     const suitIds = new Set(suitCards.map((c) => c.id));
-    const rest = sortByOrder(hand.filter((c) => !suitIds.has(c.id)));
-    play = [...suitCards, ...rest.slice(0, n - suitCards.length)];
+    const restCards = hand.filter((c) => !suitIds.has(c.id));
+    const rest = sortByOrder(restCards);
+    const trumpWinners =
+      suitCards.length === 0 && !teammateWinning && view.trickPointsSoFar > 0
+        ? trumpingGroups(lead, winning, restCards, trump)
+        : [];
+    if (trumpWinners.length > 0) {
+      play = trumpWinners[0];
+      reason = 'trump-points-minimal';
+    } else {
+      play = [...suitCards, ...rest.slice(0, n - suitCards.length)];
+      reason = suitCards.length > 0 ? 'follow-forced-suit' : teammateWinning ? 'support-teammate' : 'avoid-points';
+    }
   } else if (lead.type === 'single') {
     const byStrength = [...suitCards].sort(
       (a, b) => cardStrength(a, trump) - cardStrength(b, trump),
     );
-    const strongest = byStrength[byStrength.length - 1];
-    const canBeat =
-      winning.suit === lead.suit && cardStrength(strongest, trump) > winning.strength;
-    play = !teammateWinning && canBeat ? [strongest] : [sortByOrder(suitCards)[0]];
+    const smallestWinner = byStrength.find((card) => cardStrength(card, trump) > winning.strength);
+    const canBeat = winning.suit === lead.suit && smallestWinner !== undefined;
+    if (!teammateWinning && view.trickPointsSoFar > 0 && canBeat) {
+      play = [smallestWinner];
+      reason = 'win-points-minimal';
+    } else {
+      play = [sortByOrder(suitCards)[0]];
+      reason = teammateWinning ? 'support-teammate' : 'preserve-control';
+    }
   } else if (lead.type === 'pair') {
     const pairs = findPairs(suitCards, trump);
     if (pairs.length > 0) {
-      const sortedPairs = [...pairs].sort(
-        (a, b) => cardStrength(a[0], trump) - cardStrength(b[0], trump),
+      const winningPairs = sortByStrength(pairs, trump).filter(
+        (pair) => winning.suit === lead.suit && cardStrength(pair[0], trump) > winning.strength,
       );
-      const strongest = sortedPairs[sortedPairs.length - 1];
-      const canBeat =
-        winning.suit === lead.suit && cardStrength(strongest[0], trump) > winning.strength;
-      if (!teammateWinning && canBeat) {
-        play = strongest;
+      if (!teammateWinning && view.trickPointsSoFar > 0 && winningPairs.length > 0) {
+        play = winningPairs[0];
+        reason = 'win-points-minimal';
       } else {
-        const cheapest = [...pairs].sort(
-          (a, b) => orderScore(a[0], trump) - orderScore(b[0], trump),
-        )[0];
-        play = cheapest;
+        play = sortByGroupScore(pairs, trump, orderScore)[0];
+        reason = teammateWinning ? 'support-teammate' : 'preserve-control';
       }
     } else {
       play = sortByOrder(suitCards).slice(0, 2);
+      reason = 'follow-forced-suit';
     }
   } else if (lead.type === 'throw-pairs') {
     const pairLen = n / 2;
@@ -118,39 +223,50 @@ function decideFollow(view: BotPlayView): string[] {
     const need = Math.min(pairs.length, pairLen);
     const used = new Set<string>();
     play = [];
-    for (const p of pairs.slice(0, need)) {
+    for (const p of sortByGroupScore(pairs, trump, orderScore).slice(0, need)) {
       play.push(...p);
       for (const c of p) used.add(c.id);
     }
     const rest = sortByOrder(suitCards.filter((c) => !used.has(c.id)));
     play.push(...rest.slice(0, n - play.length));
+    reason = 'follow-throw-pairs';
   } else {
     // tractor
     const pairLen = n / 2;
     const tractors = findTractors(suitCards, trump, pairLen);
     if (tractors.length > 0) {
-      play = tractors[tractors.length - 1];
+      const winningTractors = sortByStrength(tractors, trump).filter(
+        (tractor) => winning.suit === lead.suit && cardsStrength(tractor, trump) > winning.strength,
+      );
+      if (!teammateWinning && view.trickPointsSoFar > 0 && winningTractors.length > 0) {
+        play = winningTractors[0];
+        reason = 'win-points-minimal';
+      } else {
+        play = sortByGroupScore(tractors, trump, orderScore)[0];
+        reason = teammateWinning ? 'support-teammate' : 'preserve-control';
+      }
     } else {
       const pairs = findPairs(suitCards, trump);
       const need = Math.min(pairs.length, pairLen);
       const used = new Set<string>();
       play = [];
-      for (const p of pairs.slice(0, need)) {
+      for (const p of sortByGroupScore(pairs, trump, orderScore).slice(0, need)) {
         play.push(...p);
         for (const c of p) used.add(c.id);
       }
       const rest = sortByOrder(suitCards.filter((c) => !used.has(c.id)));
       play.push(...rest.slice(0, n - play.length));
+      reason = 'follow-tractor';
     }
   }
 
   const check = validateFollow(lead, play, hand, trump);
-  if (check.ok) return play.map((c) => c.id);
+  if (check.ok) return plan(play, reason);
   // 理论不可达的兜底：花色牌优先 + 垫牌补齐
   const suitIds = new Set(suitCards.map((c) => c.id));
   const fallback = [
     ...sortByOrder(suitCards),
     ...sortByOrder(hand.filter((c) => !suitIds.has(c.id))),
   ].slice(0, n);
-  return fallback.map((c) => c.id);
+  return plan(fallback, 'fallback');
 }
