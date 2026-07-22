@@ -179,3 +179,13 @@
 **影响：** `evaluateThrowLead` 只允许对手触发失败；round 层在只有队友能压时会保留完整甩牌并不增加 `throwPenaltyPoints`。
 
 **回滚：** 回滚 `packages/game/src/throw.ts` 中同队过滤和对应 `throw.test.ts` / `round.test.ts` 用例即可恢复旧行为。
+
+## 2026-07-22：ITER-001 先用前端同步 pending 锁消除误导性重复点击
+
+**决策：** 第一小闭环不改服务端协议，先在 `GameTable` 对所有服务端动作建立本地 pending 锁，并用 `pendingActionRef` 做同步幂等保护；`ActionBar` 负责展示“处理中…”和禁用状态。
+
+**原因：** 用户可见问题来自快速重复点击后的误导性错误提示。服务端已有规则校验能保证状态安全，但玩家需要在操作位置看到“请求已提交”。浏览器验证证明仅依赖重新渲染后的 `disabled` 存在同帧双击窗口，因此需要同步 ref 锁。
+
+**影响：** 亮牌、过牌、埋底、出牌、下一局提交后进入 pending；收到新 `RoomStateView` 或错误后释放。提示、清空选择、手牌选择在 pending 期间禁用，避免玩家误以为能修改已提交动作。
+
+**回滚：** 回滚 `ActionBar` 的 `pendingAction` prop、`GameTable` 的 `submitAction`/`pendingActionRef` 和 `actionBar.test.tsx` 的 pending 用例即可恢复旧行为。错误持久化和 socket 级幂等断言继续作为 ITER-001 后续小闭环。

@@ -25,7 +25,7 @@
 | ID | 功能名称 | 优先级 | 状态 | 依赖 | 详情文档 | 主要证据来源 |
 | --- | --- | --- | --- | --- | --- | --- |
 | ITER-000 | 基线收敛与分支治理 | P0 | Done | 无 | `000-baseline-governance.md` | 当前 worktree 有大量未提交改动；README 第一版限制；`docs/game-iteration/test-report.md` |
-| ITER-001 | 快速/重复操作的幂等与可理解错误反馈 | P0 | Backlog | ITER-000 | `001-action-idempotency-error-feedback.md` | `ActionBar.tsx` 无 in-flight 锁；`apps/server/src/app.ts#act`; rules review P2 |
+| ITER-001 | 快速/重复操作的幂等与可理解错误反馈 | P0 | In Progress | ITER-000 | `001-action-idempotency-error-feedback.md` | `ActionBar.tsx` 无 in-flight 锁；`apps/server/src/app.ts#act`; rules review P2 |
 | ITER-002 | 确定性 E2E 与多客户端浏览器验证基础设施 | P0 | Backlog | ITER-000 | `002-deterministic-e2e-harness.md` | `docs/game-iteration/test-report.md` 标注浏览器脚本未纳入仓库；UI QA matrix |
 | ITER-003 | 卡牌操作无障碍与键盘/触屏一致性 | P0 | Backlog | ITER-002 | `003-card-accessibility.md` | `CardFace.tsx` 使用 clickable div；UI QA P0 |
 | ITER-004 | Bot 调度竞态、取消和驻留节奏测试 | P1 | Backlog | ITER-000 | `004-bot-scheduler-race-coverage.md` | `botRunner.test.ts` 只测 delay range；`botRunner.ts` pending timer |
@@ -63,7 +63,7 @@
 
 当前完成项：`ITER-015 出牌提示按钮与可解释推荐`。
 
-当前推进项：`ITER-017 扩展功能缺陷池与回归修复流程`。当前小闭环为 `BUG-017-001`：修复重连/刷新后上一墩回放覆盖当前墩、赢家显示不可信的回归风险。
+当前推进项：`ITER-001 快速/重复操作的幂等与可理解错误反馈`。第一小闭环“前端 pending 锁”已通过；后续小闭环继续补错误提示持久化、重复错误弱提示和 socket 级重复动作断言。
 
 ## 已知延期但必须追踪
 

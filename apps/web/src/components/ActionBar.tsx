@@ -5,11 +5,14 @@ import { SUIT_SYMBOL } from '../lib/format';
 import { describeWaiting } from '../lib/waiting';
 import type { PlayHint } from '../lib/playHint';
 
+export type PendingAction = 'bid' | 'pass' | 'bury' | 'play' | 'next-round';
+
 type Props = {
   view: RoomStateView;
   selectedCount: number;
   playHint?: PlayHint | null;
   hintAvailable?: boolean;
+  pendingAction?: PendingAction | null;
   // 上一墩驻留展示中：暂不开放出牌，避免真人抢跑打乱驻留节奏
   holdActive: boolean;
   onBid: (cardIds: string[]) => void;
@@ -34,7 +37,15 @@ function optionCountLabel(option: BidOption): string {
 }
 
 // 叫主花色选择器：能叫的点亮可点，不能叫的置暗；王对为无主
-function BidOptions({ view, onBid }: { view: RoomStateView; onBid: (cardIds: string[]) => void }) {
+function BidOptions({
+  view,
+  disabled = false,
+  onBid,
+}: {
+  view: RoomStateView;
+  disabled?: boolean;
+  onBid: (cardIds: string[]) => void;
+}) {
   const options = useMemo(
     () => (view.trump ? availableBids(view.yourHand, view.trump.level, view.currentBid) : []),
     [view.yourHand, view.trump, view.currentBid],
@@ -55,7 +66,7 @@ function BidOptions({ view, onBid }: { view: RoomStateView; onBid: (cardIds: str
           <button
             key={s}
             className={`bid-option suit-btn-${s} ${opt ? 'lit' : 'dim'}`}
-            disabled={!opt}
+            disabled={disabled || !opt}
             title={opt ? `亮${optionCountLabel(opt)}${SUIT_SYMBOL[s]}级牌` : '没有可亮的级牌'}
             onClick={() => opt && pick(opt)}
           >
@@ -69,7 +80,7 @@ function BidOptions({ view, onBid }: { view: RoomStateView; onBid: (cardIds: str
         return (
           <button
             className={`bid-option bid-nt ${nt ? 'lit' : 'dim'}`}
-            disabled={!nt}
+            disabled={disabled || !nt}
             title={
               nt
                 ? `${nt.kind.startsWith('big-joker') ? '大' : '小'}王${optionCountLabel(nt)}叫无主`
@@ -97,6 +108,7 @@ export default function ActionBar({
   selectedCount,
   playHint = null,
   hintAvailable = false,
+  pendingAction = null,
   holdActive,
   onBid,
   onPass,
@@ -110,14 +122,17 @@ export default function ActionBar({
   const isBidTurn = seated && view.biddingTurn === view.yourSeat;
   const isDealer = seated && view.dealerSeat === view.yourSeat;
   const isPlayTurn = seated && view.turnSeat === view.yourSeat;
+  const actionPending = pendingAction !== null;
   const playButtonText = selectedCount >= 4 ? '出牌 / 甩牌' : '出牌';
 
   return (
     <div className="action-bar">
       {view.phase === 'bidding' && isBidTurn && (
         <>
-          <BidOptions view={view} onBid={onBid} />
-          <button onClick={onPass}>过</button>
+          <BidOptions view={view} disabled={actionPending} onBid={onBid} />
+          <button disabled={actionPending} onClick={onPass}>
+            {pendingAction === 'pass' || pendingAction === 'bid' ? '处理中…' : '过'}
+          </button>
         </>
       )}
       {view.phase === 'bidding' && seated && !isBidTurn && (
@@ -133,8 +148,8 @@ export default function ActionBar({
               </>
             )}
             <span className="bury-count">已选 {selectedCount}/8</span>
-            <button className="primary" disabled={selectedCount !== 8} onClick={onBury}>
-              确认埋牌
+            <button className="primary" disabled={selectedCount !== 8 || actionPending} onClick={onBury}>
+              {pendingAction === 'bury' ? '处理中…' : '确认埋牌'}
             </button>
           </>
         ) : (
@@ -148,15 +163,15 @@ export default function ActionBar({
             {(hintAvailable || playHint) && (
               <button
                 className="hint-button"
-                disabled={!hintAvailable || !onHint}
+                disabled={!hintAvailable || !onHint || actionPending}
                 onClick={onHint}
                 title={hintAvailable ? '按当前局面推荐一手牌' : '当前没有可用提示'}
               >
                 提示
               </button>
             )}
-            <button className="primary" disabled={selectedCount === 0} onClick={onPlay}>
-              {playButtonText}
+            <button className="primary" disabled={selectedCount === 0 || actionPending} onClick={onPlay}>
+              {pendingAction === 'play' ? '处理中…' : playButtonText}
             </button>
             {playHint && <span className="play-hint-copy">推荐：{playHint.message}</span>}
           </>
@@ -164,11 +179,15 @@ export default function ActionBar({
           <span className="muted">{describeWaiting(view, false)}</span>
         ))}
       {view.phase === 'scoring' && seated && (
-        <button className="primary" onClick={onNextRound}>
-          下一局
+        <button className="primary" disabled={actionPending} onClick={onNextRound}>
+          {pendingAction === 'next-round' ? '处理中…' : '下一局'}
         </button>
       )}
-      {selectedCount > 0 && <button onClick={onClear}>清空选择</button>}
+      {selectedCount > 0 && (
+        <button disabled={actionPending} onClick={onClear}>
+          清空选择
+        </button>
+      )}
     </div>
   );
 }

@@ -133,33 +133,6 @@
 - 命令：`pnpm build`
 - 结果：通过，shared/game/bot/server/web 均构建成功。
 
-### BUG-017-002 队友误触发甩牌失败
-
-#### 红测记录
-
-- 命令：`pnpm test packages/game/test/throw.test.ts`
-- 结果：失败，`succeeds when only the thrower teammate can beat a thrown pair` 收到 `failure`，期望 `success`。
-- 结论：旧实现把队友也当成可挑战甩牌的人。
-
-- 命令：`pnpm test packages/game/test/throw.test.ts packages/game/test/round.test.ts`
-- 结果：失败，round 层只落桌 `S-5` 对，期望完整甩牌 `S-5` 对 + `S-8` 对。
-- 结论：队友误挑战不仅影响规则结果，也会错误改变实际落桌牌和罚分账本。
-
-#### 修复后验证
-
-- 命令：`pnpm test packages/game/test/throw.test.ts packages/game/test/round.test.ts packages/game/test/scoring.test.ts`
-- 结果：通过，3 个测试文件，40 个测试。
-- 覆盖：队友不能触发甩牌失败、对手仍可触发失败、round 层不产生错误罚分、结算规则未回归。
-
-- 命令：`pnpm test`
-- 结果：通过，26 个测试文件，210 个测试。
-
-- 命令：`pnpm typecheck`
-- 结果：通过，`pnpm -r exec tsc --noEmit` 无错误。
-
-- 命令：`pnpm build`
-- 结果：通过，shared/game/bot/server/web 均构建成功。
-
 ### 浏览器验证
 
 - 命令：`pnpm dev`
@@ -203,3 +176,66 @@
 
 - 命令：`pnpm build`
 - 结果：通过，shared/game/bot/server/web 均构建成功。
+
+### BUG-017-002 队友误触发甩牌失败
+
+#### 红测记录
+
+- 命令：`pnpm test packages/game/test/throw.test.ts`
+- 结果：失败，`succeeds when only the thrower teammate can beat a thrown pair` 收到 `failure`，期望 `success`。
+- 结论：旧实现把队友也当成可挑战甩牌的人。
+
+- 命令：`pnpm test packages/game/test/throw.test.ts packages/game/test/round.test.ts`
+- 结果：失败，round 层只落桌 `S-5` 对，期望完整甩牌 `S-5` 对 + `S-8` 对。
+- 结论：队友误挑战不仅影响规则结果，也会错误改变实际落桌牌和罚分账本。
+
+#### 修复后验证
+
+- 命令：`pnpm test packages/game/test/throw.test.ts packages/game/test/round.test.ts packages/game/test/scoring.test.ts`
+- 结果：通过，3 个测试文件，40 个测试。
+- 覆盖：队友不能触发甩牌失败、对手仍可触发失败、round 层不产生错误罚分、结算规则未回归。
+
+- 命令：`pnpm test`
+- 结果：通过，26 个测试文件，210 个测试。
+
+- 命令：`pnpm typecheck`
+- 结果：通过，`pnpm -r exec tsc --noEmit` 无错误。
+
+- 命令：`pnpm build`
+- 结果：通过，shared/game/bot/server/web 均构建成功。
+
+## ITER-001 快速/重复操作的幂等与可理解错误反馈
+
+### 第一小闭环：前端 pending 锁
+
+#### 红测记录
+
+- 命令：`pnpm test apps/web/test/actionBar.test.tsx apps/web/test/playHint.test.ts apps/web/test/handFan.test.tsx`
+- 结果：失败，ActionBar pending 场景 HTML 不包含 `处理中…`，按钮仍为可用态。
+- 结论：服务端动作提交后缺少玩家可见的等待反馈，也不能阻止重复点击。
+
+#### 修复后验证
+
+- 命令：`pnpm test apps/web/test/actionBar.test.tsx apps/web/test/playHint.test.ts apps/web/test/handFan.test.tsx`
+- 结果：通过，3 个测试文件，10 个测试。
+- 覆盖：pending 出牌、pending 过牌、提示按钮、推荐高亮和 ActionBar 既有文案不回归。
+
+- 命令：`pnpm test`
+- 结果：通过，26 个测试文件，212 个测试。
+
+- 命令：`pnpm typecheck`
+- 结果：通过，`pnpm -r exec tsc --noEmit` 无错误。
+
+- 命令：`pnpm build`
+- 结果：通过，shared/game/bot/server/web 均构建成功。
+
+- 命令：`git diff --check`
+- 结果：通过，无 whitespace error。
+
+#### 浏览器验证
+
+- 命令：`pnpm dev`
+- URL：`http://localhost:5173/`
+- 亮主阶段路径：页面位于真人叫主回合，DOM 显示 `♠♥♦♣王小对过`；快速连续点击 `过` 后进入机器人叫主/庄后反牌流程，toast 为空。
+- 出牌阶段路径：真人跟牌回合，先选中一张黑桃，再对 `出牌` 执行双击；页面只推进到等待下一位机器人出牌，toast 为空。
+- 对抗发现：第一版浏览器验证中连续点击可能发生在 React disabled 重绘之前，因此补了同步 `pendingActionRef` 锁后重新验证。

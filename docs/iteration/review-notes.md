@@ -205,3 +205,30 @@
   - 已修复：折叠摘要和展开明细都展示上一墩甩牌成功/失败，并补 `trickArea.test.tsx` 回归。
 - Minor：bot 通过拖拉机兜底跟 `throw-pairs`。
   - 已修复：新增显式 `throw-pairs` 跟牌分支，并补 `bot.test.ts` 回归。
+
+## 2026-07-22：ITER-001 第一小闭环多角色评审
+
+### 产品经理 / 真实玩家体验官
+
+- 发现：重复点击后的 `wrong-turn` 对玩家语义不正确；真实感知是“刚才点过了，系统是否还在处理”。
+- 采纳：服务端动作提交后按钮显示“处理中…”，并禁用继续选择或再次提交。
+- 发现：亮牌/反主/出牌流程中等待反馈应落在操作栏附近，不能只靠顶部状态。
+- 采纳：本轮先在 ActionBar 原操作位置展示 pending 文案，减少视线跳转。
+
+### 前端交互评审 / 对抗评审
+
+- 发现：只给按钮加 `disabled` 存在 React 重绘前的双击窗口。
+- 采纳：`GameTable` 增加同步 `pendingActionRef`，第一次 handler 内立即锁定，第二次 handler 即使同帧触发也不再 emit。
+- 发现：结算弹窗“下一局”绕过了 ActionBar。
+- 采纳：弹窗按钮改用同一个 `nextRound` pending 入口。
+
+### QA 测试工程师
+
+- 新增 SSR 组件测试覆盖 pending 出牌和 pending 过牌。
+- 目标回归覆盖出牌提示、推荐高亮、ActionBar 既有状态。
+- 浏览器真实验证覆盖亮主阶段快速过牌、出牌阶段双击出牌，toast 均为空。
+
+### Release Reviewer
+
+- 回滚建议：按本轮单提交回滚；手工回滚重点是 `apps/web/src/pages/GameTable.tsx`、`apps/web/src/components/ActionBar.tsx` 和 `apps/web/test/actionBar.test.tsx`。
+- 剩余风险：错误提示持久化、重复错误弱提示和 socket 级重复动作断言还未完成，继续保留在 ITER-001 后续小闭环。

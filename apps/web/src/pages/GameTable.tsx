@@ -8,7 +8,7 @@ import { deriveAnnouncements, type Announcement } from '../lib/announcements';
 import StatusBar from '../components/StatusBar';
 import TrickArea from '../components/TrickArea';
 import HandFan from '../components/HandFan';
-import ActionBar from '../components/ActionBar';
+import ActionBar, { type PendingAction } from '../components/ActionBar';
 import ResultModal from '../components/ResultModal';
 import ChatPanel from '../components/ChatPanel';
 import AnnouncementBanner from '../components/AnnouncementBanner';
@@ -32,16 +32,30 @@ export default function GameTable() {
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [playHint, setPlayHint] = useState<ActivePlayHint | null>(null);
+  const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
   const [resultDismissed, setResultDismissed] = useState(false);
   // 每墩打完：完整一墩在中央驻留 3s 再切回实时牌面
   const [settled, setSettled] = useState<{ plays: TrickPlayView[]; winnerSeat: number | null } | null>(null);
   const holdTimer = useRef<number | undefined>(undefined);
+  const pendingActionRef = useRef<PendingAction | null>(null);
 
   // 公告流：对比前后 view 推导亮主/反主/定庄等事件，附带递增序号避免跨局同 id 被去重
   const [events, setEvents] = useState<Announcement[]>([]);
   const prevView = useRef<RoomStateView | null>(null);
   const eventSeq = useRef(0);
+  const releasePendingAction = () => {
+    pendingActionRef.current = null;
+    setPendingAction(null);
+  };
+  const submitAction = (action: PendingAction, emit: () => void) => {
+    if (pendingActionRef.current !== null) return;
+    pendingActionRef.current = action;
+    setPendingAction(action);
+    emit();
+  };
+
   useEffect(() => {
+    releasePendingAction();
     const derived = deriveAnnouncements(prevView.current, view);
     prevView.current = view;
     if (derived.length > 0) {
@@ -51,6 +65,10 @@ export default function GameTable() {
       ]);
     }
   }, [view]);
+
+  useEffect(() => {
+    if (state.error !== null) releasePendingAction();
+  }, [state.error]);
 
   // 手牌变化（出牌/埋牌成功）时剔除已不在手中的选择；阶段切换时清空
   const prevPhase = useRef(view.phase);
@@ -98,7 +116,10 @@ export default function GameTable() {
     if (settled !== null) setPlayHint(null);
   }, [settled]);
 
+  const canSubmitAction = pendingAction === null && pendingActionRef.current === null;
+
   const toggle = (id: string) => {
+    if (!canSubmitAction) return;
     setPlayHint(null);
     setSelected((prev) => {
       const next = new Set(prev);
@@ -109,25 +130,48 @@ export default function GameTable() {
   };
 
   const applyPlayHint = () => {
+    if (!canSubmitAction) return;
     if (availablePlayHint === null) return;
     setSelected(new Set(availablePlayHint.cardIds));
     setPlayHint({ hint: availablePlayHint, contextKey: currentPlayHintKey });
   };
 
   const playSelected = () => {
+    if (!canSubmitAction) return;
     setPlayHint(null);
-    socket.emit(C2S.TrickPlay, { cardIds: cardIds() });
+    submitAction('play', () => socket.emit(C2S.TrickPlay, { cardIds: cardIds() }));
   };
 
   const clearSelection = () => {
+    if (!canSubmitAction) return;
     setPlayHint(null);
     setSelected(new Set());
+  };
+
+  const revealBid = (ids: string[]) => {
+    if (!canSubmitAction) return;
+    submitAction('bid', () => socket.emit(C2S.BidReveal, { cardIds: ids }));
+  };
+
+  const passBid = () => {
+    if (!canSubmitAction) return;
+    submitAction('pass', () => socket.emit(C2S.BidPass, {}));
+  };
+
+  const buryKitty = () => {
+    if (!canSubmitAction) return;
+    submitAction('bury', () => socket.emit(C2S.KittyBury, { cardIds: cardIds() }));
+  };
+
+  const nextRound = () => {
+    if (!canSubmitAction) return;
+    submitAction('next-round', () => socket.emit(C2S.RoundNext, {}));
   };
 
   const anchor = view.yourSeat ?? 0;
   const activeSeat = view.phase === 'bidding' ? view.biddingTurn : view.turnSeat;
   const canSelect =
-    view.yourSeat !== null && (view.phase === 'burying' || view.phase === 'playing');
+    canSubmitAction && view.yourSeat !== null && (view.phase === 'burying' || view.phase === 'playing');
 
   return (
     <div className="game-table">
@@ -163,20 +207,21 @@ export default function GameTable() {
         selectedCount={selected.size}
         playHint={activePlayHint}
         hintAvailable={availablePlayHint !== null && settled === null}
+        pendingAction={pendingAction}
         holdActive={settled !== null}
-        onBid={(ids) => socket.emit(C2S.BidReveal, { cardIds: ids })}
-        onPass={() => socket.emit(C2S.BidPass, {})}
-        onBury={() => socket.emit(C2S.KittyBury, { cardIds: cardIds() })}
+        onBid={revealBid}
+        onPass={passBid}
+        onBury={buryKitty}
         onHint={applyPlayHint}
         onPlay={playSelected}
-        onNextRound={() => socket.emit(C2S.RoundNext, {})}
+        onNextRound={nextRound}
         onClear={clearSelection}
       />
       <HandFan hand={hand} selected={selected} hinted={hintedCards} disabled={!canSelect} onToggle={toggle} />
       {view.phase === 'scoring' && !resultDismissed && settled === null && (
         <ResultModal
           view={view}
-          onNextRound={() => socket.emit(C2S.RoundNext, {})}
+          onNextRound={nextRound}
           onDismiss={() => setResultDismissed(true)}
         />
       )}

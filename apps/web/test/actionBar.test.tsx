@@ -108,4 +108,44 @@ describe('ActionBar', () => {
     expect(html).toContain('提示');
     expect(html).toContain('敌方当前领先');
   });
+
+  it('disables play actions while a play request is pending', () => {
+    const html = renderToStaticMarkup(
+      React.createElement(ActionBar as React.ComponentType<Record<string, unknown>>, {
+        view: mkView({ phase: 'playing', turnSeat: 0 }),
+        selectedCount: 1,
+        pendingAction: 'play',
+        holdActive: false,
+        onBid: () => {},
+        onPass: () => {},
+        onBury: () => {},
+        onPlay: () => {},
+        onNextRound: () => {},
+        onClear: () => {},
+      }),
+    );
+
+    expect(html).toContain('处理中…');
+    expect(html).toContain('disabled=""');
+  });
+
+  it('disables bidding actions while a pass request is pending', () => {
+    const html = renderToStaticMarkup(
+      React.createElement(ActionBar as React.ComponentType<Record<string, unknown>>, {
+        view: mkView({ phase: 'bidding', biddingTurn: 0 }),
+        selectedCount: 0,
+        pendingAction: 'pass',
+        holdActive: false,
+        onBid: () => {},
+        onPass: () => {},
+        onBury: () => {},
+        onPlay: () => {},
+        onNextRound: () => {},
+        onClear: () => {},
+      }),
+    );
+
+    expect(html).toContain('处理中…');
+    expect(html).toContain('disabled=""');
+  });
 });
