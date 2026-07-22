@@ -1,15 +1,16 @@
-import type { RoomStateView } from '@shengji/shared';
+import { teamOfSeat, type RoomStateView } from '@shengji/shared';
 import CardFace from './CardFace';
 import { rankText } from '../lib/format';
 
 type Props = {
   view: RoomStateView;
+  autoContinueSeconds?: number | null;
   onNextRound: () => void;
   onDismiss: () => void;
 };
 
 // 结算弹窗：闲家得分 / 底牌明细 / 扣底 / 升级结果 / 下局庄家
-export default function ResultModal({ view, onNextRound, onDismiss }: Props) {
+export default function ResultModal({ view, autoContinueSeconds = null, onNextRound, onDismiss }: Props) {
   const r = view.roundResult;
   if (!r) return null;
   const winnerText = r.winnerTeam === 0 ? '蓝队（0/2 号位）' : '红队（1/3 号位）';
@@ -17,21 +18,58 @@ export default function ResultModal({ view, onNextRound, onDismiss }: Props) {
   const throwDelta = r.throwPenaltyDelta ?? 0;
   const throwPenaltyPoints = r.throwPenaltyPoints ?? [0, 0];
   const hasThrowPenaltyLedger = throwPenaltyPoints.some((points) => points > 0);
-  const baseDefenderPoints = r.baseDefenderPoints ?? r.defenderPoints - throwDelta;
+  const defenderPointsBeforeThrow = r.baseDefenderPoints ?? r.defenderPoints - throwDelta;
+  const trickDefenderPoints = Math.max(0, defenderPointsBeforeThrow - r.kittyBonus);
+  const dealerTeam = view.dealerSeat === null ? 0 : teamOfSeat(view.dealerSeat);
+  const dealerWon = r.winnerTeam === dealerTeam;
+  const outcomeText = dealerWon
+    ? r.levelDelta >= 3
+      ? '庄家大胜! +3级'
+      : r.levelDelta === 2
+        ? '庄家大胜! +2级'
+        : '庄家小胜 +1级'
+    : r.levelDelta === 0
+      ? '换庄 (不升级)'
+      : r.levelDelta === 1
+        ? '闲家小胜 +1级'
+        : r.levelDelta === 2
+          ? '闲家大胜! +2级'
+          : '闲家大胜! +3级';
+  const defenderWonLastTrick =
+    view.lastTrickWinnerSeat !== null && view.dealerSeat !== null && teamOfSeat(view.lastTrickWinnerSeat) !== dealerTeam;
+  const kittyExplanation =
+    r.kittyBonus > 0
+      ? `闲家扣底 +${r.kittyBonus}`
+      : defenderWonLastTrick
+        ? '闲家扣底成功，但底牌无分'
+        : '庄家守住底牌 (无扣底)';
+  const levelChangeText = ([0, 1] as const)
+    .map((team) => {
+      const teamName = team === 0 ? '蓝队' : '红队';
+      const before = rankText(view.teamLevels[team]);
+      const after = rankText(r.nextLevels[team]);
+      return before === after ? `${teamName} ${before}` : `${teamName} ${before} → ${after}`;
+    })
+    .join(' / ');
   return (
     <div className="modal-mask">
       <div className="modal">
         <h3>本局结算</h3>
+        <div className="result-outcome">{outcomeText}</div>
+        <div className="result-row">
+          <span>闲家基础得分</span>
+          <b className="points">{trickDefenderPoints}</b>
+        </div>
+        <div className="result-row">
+          <span>扣底说明</span>
+          <b className="points">{kittyExplanation}</b>
+        </div>
         <div className="result-row">
           <span>闲家总分</span>
           <b className="points">{r.defenderPoints}</b>
         </div>
-        {(hasThrowPenaltyLedger || throwDelta !== 0 || baseDefenderPoints !== r.defenderPoints) && (
+        {(hasThrowPenaltyLedger || throwDelta !== 0 || defenderPointsBeforeThrow !== r.defenderPoints) && (
           <>
-            <div className="result-row">
-              <span>基础牌分</span>
-              <b className="points">{baseDefenderPoints}</b>
-            </div>
             <div className="result-row">
               <span>甩牌惩罚</span>
               <b className="points">
@@ -40,12 +78,6 @@ export default function ResultModal({ view, onNextRound, onDismiss }: Props) {
               </b>
             </div>
           </>
-        )}
-        {r.kittyBonus > 0 && (
-          <div className="result-row">
-            <span>其中扣底</span>
-            <b className="points">+{r.kittyBonus}</b>
-          </div>
         )}
         <div className="result-row kitty-row">
           <span>底牌</span>
@@ -57,16 +89,11 @@ export default function ResultModal({ view, onNextRound, onDismiss }: Props) {
         </div>
         <div className="result-row">
           <span>获胜方</span>
-          <b>
-            {winnerText} 升 {r.levelDelta} 级
-          </b>
+          <b>{r.levelDelta === 0 ? `${winnerText} 换庄，不升级` : `${winnerText} 升 ${r.levelDelta} 级`}</b>
         </div>
         <div className="result-row">
-          <span>下局级牌</span>
-          <b>
-            <span className="team-0-text">{rankText(r.nextLevels[0])}</span>/
-            <span className="team-1-text">{rankText(r.nextLevels[1])}</span>
-          </b>
+          <span>队伍升级</span>
+          <b>{levelChangeText}</b>
         </div>
         <div className="result-row">
           <span>下局庄家</span>
@@ -80,6 +107,11 @@ export default function ResultModal({ view, onNextRound, onDismiss }: Props) {
             </button>
           )}
         </div>
+        {autoContinueSeconds !== null && (
+          <div className="auto-continue-status" role="status" aria-live="polite">
+            {autoContinueSeconds} 秒后自动继续
+          </div>
+        )}
       </div>
     </div>
   );

@@ -3,6 +3,7 @@ import type { RoomListItem } from '@shengji/shared';
 import { C2S } from '@shengji/shared';
 import { getNickname, getPlayerId, getSocket, setNickname } from '../socket';
 import { useStore } from '../store';
+import { clearQuickStartSession, markQuickStartRequested } from '../lib/quickStart';
 
 export default function Lobby() {
   const { state } = useStore();
@@ -38,7 +39,8 @@ export default function Lobby() {
   const createRoom = (quickBots: boolean) => {
     const nickname = requireNick();
     if (!nickname) return;
-    if (quickBots) sessionStorage.setItem('shengji:quickBots', '1');
+    if (quickBots) markQuickStartRequested();
+    else clearQuickStartSession();
     getSocket().emit(C2S.RoomCreate, {
       nickname,
       playerId: getPlayerId(),
@@ -54,6 +56,7 @@ export default function Lobby() {
       window.setTimeout(() => setHint(null), 2500);
       return;
     }
+    clearQuickStartSession();
     getSocket().emit(C2S.RoomJoin, {
       roomCode: code.trim().toUpperCase(),
       nickname,

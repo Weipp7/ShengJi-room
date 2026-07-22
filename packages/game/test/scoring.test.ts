@@ -58,6 +58,24 @@ describe('settleRound', () => {
     expect(res.nextLevels).toEqual([3, 2]);
   });
 
+  it('matches the shengji.org observed 55-point dealer hold sample', () => {
+    const res = settleRound({
+      dealerSeat: 3,
+      defenderTrickPoints: 55,
+      kitty,
+      lastTrickWinnerSeat: 3,
+      lastTrickCardsPerPlayer: 1,
+      teamLevels: [2, 2],
+    });
+
+    expect(res.defenderPoints).toBe(55);
+    expect(res.kittyBonus).toBe(0);
+    expect(res.winnerTeam).toBe(1);
+    expect(res.levelDelta).toBe(1);
+    expect(res.nextDealerSeat).toBe(1);
+    expect(res.nextLevels).toEqual([2, 3]);
+  });
+
   it('defenders win (≥80) → next seat becomes dealer, defender team levels up', () => {
     const res = settleRound({
       dealerSeat: 0,

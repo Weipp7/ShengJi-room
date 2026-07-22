@@ -26,7 +26,7 @@
 | --- | --- | --- | --- | --- | --- | --- |
 | ITER-000 | 基线收敛与分支治理 | P0 | Done | 无 | `000-baseline-governance.md` | 当前 worktree 有大量未提交改动；README 第一版限制；`docs/game-iteration/test-report.md` |
 | ITER-001 | 快速/重复操作的幂等与可理解错误反馈 | P0 | Done | ITER-000 | `001-action-idempotency-error-feedback.md` | `ActionBar.tsx` pending 锁；`ErrorToast.tsx`；`apps/server/test/gameFlow.test.ts` 重复动作断言 |
-| ITER-002 | 确定性 E2E 与多客户端浏览器验证基础设施 | P0 | In Progress | ITER-000 | `002-deterministic-e2e-harness.md` | `pnpm test:e2e`；`playwright.config.ts`；两 context 亮主/反主截图 |
+| ITER-002 | 确定性 E2E 与多客户端浏览器验证基础设施 | P0 | Ready | ITER-000 | `002-deterministic-e2e-harness.md` | `pnpm test:e2e`；`playwright.config.ts`；两 context 亮主/反主截图 |
 | ITER-003 | 卡牌操作无障碍与键盘/触屏一致性 | P0 | Backlog | ITER-002 | `003-card-accessibility.md` | `CardFace.tsx` 使用 clickable div；UI QA P0 |
 | ITER-004 | Bot 调度竞态、取消和驻留节奏测试 | P1 | Backlog | ITER-000 | `004-bot-scheduler-race-coverage.md` | `botRunner.test.ts` 只测 delay range；`botRunner.ts` pending timer |
 | ITER-005 | 规则边界与结算端到端测试补齐 | P1 | Done | ITER-000 | `005-rule-boundary-coverage.md` | rules review: cross-team level, no-trump, broken follow, kitty multiplier |
@@ -41,7 +41,8 @@
 | ITER-014 | 庄前反牌与庄后反牌阶段 | P0 | Done | ITER-013 | `014-pre-post-dealer-counter-phases.md` | 用户新增目标；`packages/game/src/round.ts`; bidding -> bury -> play 状态机 |
 | ITER-015 | 出牌提示按钮与可解释推荐 | P1 | Done | ITER-012 | `015-play-hint-button.md` | 用户新增目标；`ActionBar.tsx`; `HandFan.tsx`; bot play evaluator |
 | ITER-016 | 甩牌功能与失败惩罚结算 | P0 | Done | ITER-005, ITER-013 | `016-throw-play-and-penalty.md` | 用户新增目标；combo/follow/trick/scoring 规则链路 |
-| ITER-017 | 扩展功能缺陷池与回归修复流程 | P0 | In Progress | ITER-000 | `017-bugfix-regression-pool.md` | 用户新增目标“多项 bug 修复”；当前体验 review 与测试缺口 |
+| ITER-017 | 扩展功能缺陷池与回归修复流程 | P0 | Ready | ITER-000 | `017-bugfix-regression-pool.md` | 用户新增目标“多项 bug 修复”；当前体验 review 与测试缺口 |
+| ITER-018 | Shengji.org 快速开始与牌桌体验基准对齐 | P0 | In Progress | ITER-000, ITER-002 | `018-shengji-org-benchmark.md` | shengji.org 浏览器试玩；快速开始/提示/结算截图；本地快速机器人局差距 |
 
 ## 阶段进度
 
@@ -65,7 +66,9 @@
 
 当前完成项：`ITER-001 快速/重复操作的幂等与可理解错误反馈`。
 
-当前推进项：`ITER-002 确定性 E2E 与多客户端浏览器验证基础设施`。已完成 Playwright 基础设施、两客户端亮主/反主 smoke、紧凑横屏无溢出/无徽章重叠、刷新恢复反主状态；后续继续补收墩和结算 E2E。
+当前推进项：`ITER-018 Shengji.org 快速开始与牌桌体验基准对齐`。理由：用户明确要求对照 shengji.org 多次试玩并向其快速开始模式靠近；`ITER-002` 已提供可用 Playwright 基础设施，未完成的收墩/结算 E2E 暂停为后续小闭环。
+
+当前完成项：`ITER-018` 第一至第三小闭环。快速机器人局已从“自动补机器人后等待手动开始”改为“一键创建、补机器人、自动开始”；结算页已显示原因化结果、基础得分、扣底说明、队伍升级；快速机器人局结算后显示倒计时并自动续局；完整局到结算 E2E 已纳入 `pnpm test:e2e`。后续继续推进顶部信息密度、自动续局后的二局起始 E2E 和机器人策略样本池。
 
 ## 已知延期但必须追踪
 

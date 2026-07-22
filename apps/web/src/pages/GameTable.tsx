@@ -15,6 +15,7 @@ import AnnouncementBanner from '../components/AnnouncementBanner';
 import ContractSummary from '../components/ContractSummary';
 import { createPlayHint, playHintContextKey, type PlayHint } from '../lib/playHint';
 import { nextSettledReview, settledReviewStateKey } from '../lib/settledReview';
+import { clearQuickStartSession, isQuickStartRoom } from '../lib/quickStart';
 
 // 与 SeatRing 一致的旋转映射
 const POSITIONS = ['bottom', 'right', 'top', 'left'] as const;
@@ -34,9 +35,12 @@ export default function GameTable() {
   const [playHint, setPlayHint] = useState<ActivePlayHint | null>(null);
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
   const [resultDismissed, setResultDismissed] = useState(false);
+  const [autoContinueSeconds, setAutoContinueSeconds] = useState<number | null>(null);
   // 每墩打完：完整一墩在中央驻留 3s 再切回实时牌面
   const [settled, setSettled] = useState<{ plays: TrickPlayView[]; winnerSeat: number | null } | null>(null);
   const holdTimer = useRef<number | undefined>(undefined);
+  const autoContinueTimer = useRef<number | undefined>(undefined);
+  const autoContinueTick = useRef<number | undefined>(undefined);
   const pendingActionRef = useRef<PendingAction | null>(null);
 
   // 公告流：对比前后 view 推导亮主/反主/定庄等事件，附带递增序号避免跨局同 id 被去重
@@ -88,11 +92,15 @@ export default function GameTable() {
   }, [view.phase, view.yourHand]);
 
   const hand = useMemo(() => displaySort(view.yourHand, view.trump), [view.yourHand, view.trump]);
+  const quickStartRound = isQuickStartRoom(view.roomCode);
   const availablePlayHint = useMemo(() => createPlayHint(view), [view]);
   const currentPlayHintKey = useMemo(() => playHintContextKey(view), [view]);
   const activePlayHint = playHint?.contextKey === currentPlayHintKey ? playHint.hint : null;
   const hintedCards = useMemo(() => new Set(activePlayHint?.cardIds ?? []), [activePlayHint]);
   const cardIds = () => [...selected];
+  const roundResultKey = view.roundResult
+    ? `${view.roundResult.defenderPoints}:${view.roundResult.winnerTeam}:${view.roundResult.levelDelta}:${view.roundResult.nextDealerSeat}:${view.roundResult.nextLevels.join(',')}`
+    : null;
 
   useEffect(() => {
     setPlayHint((prev) => (prev !== null && prev.contextKey !== currentPlayHintKey ? null : prev));
@@ -165,7 +173,46 @@ export default function GameTable() {
 
   const nextRound = () => {
     if (!canSubmitAction) return;
+    window.clearTimeout(autoContinueTimer.current);
+    window.clearInterval(autoContinueTick.current);
+    setAutoContinueSeconds(null);
     submitAction('next-round', () => socket.emit(C2S.RoundNext, {}));
+  };
+
+  useEffect(() => {
+    window.clearTimeout(autoContinueTimer.current);
+    window.clearInterval(autoContinueTick.current);
+    setAutoContinueSeconds(null);
+
+    if (!quickStartRound || view.phase !== 'scoring' || view.yourSeat === null || resultDismissed) return;
+
+    setAutoContinueSeconds(10);
+    autoContinueTick.current = window.setInterval(() => {
+      setAutoContinueSeconds((prev) => (prev === null ? null : Math.max(0, prev - 1)));
+    }, 1000);
+    autoContinueTimer.current = window.setTimeout(() => {
+      if (pendingActionRef.current !== null) return;
+      pendingActionRef.current = 'next-round';
+      setPendingAction('next-round');
+      getSocket().emit(C2S.RoundNext, {});
+    }, 10000);
+
+    return () => {
+      window.clearTimeout(autoContinueTimer.current);
+      window.clearInterval(autoContinueTick.current);
+    };
+  }, [quickStartRound, view.phase, view.yourSeat, resultDismissed, roundResultKey]);
+
+  const leaveCurrentGame = () => {
+    clearQuickStartSession();
+    leaveRoom();
+  };
+
+  const dismissResult = () => {
+    window.clearTimeout(autoContinueTimer.current);
+    window.clearInterval(autoContinueTick.current);
+    setAutoContinueSeconds(null);
+    setResultDismissed(true);
   };
 
   const anchor = view.yourSeat ?? 0;
@@ -175,7 +222,7 @@ export default function GameTable() {
 
   return (
     <div className="game-table">
-      <StatusBar view={view} onLeave={leaveRoom} />
+      <StatusBar view={view} onLeave={leaveCurrentGame} />
       <ContractSummary view={view} />
       <AnnouncementBanner incoming={events} />
       <div className="table-main">
@@ -221,8 +268,9 @@ export default function GameTable() {
       {view.phase === 'scoring' && !resultDismissed && settled === null && (
         <ResultModal
           view={view}
+          autoContinueSeconds={autoContinueSeconds}
           onNextRound={nextRound}
-          onDismiss={() => setResultDismissed(true)}
+          onDismiss={dismissResult}
         />
       )}
       <ChatPanel />

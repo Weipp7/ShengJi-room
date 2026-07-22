@@ -229,3 +229,33 @@
 **影响：** 紧凑横屏下左侧座位更靠上，给底部玩家和手牌区域留空间。E2E 用 bounding-box 断言固定该约束。
 
 **回滚：** 恢复 `.player-left` 紧凑横屏样式，删除 compact E2E 中的 badge overlap 断言和截图即可。
+
+## 2026-07-22：ITER-018 用 shengji.org 作为产品基准但不复制不可见服务端策略
+
+**决策：** 新增 `ITER-018`，优先对齐 `shengji.org` 的快速开始和玩家可见信息层级；外站只能从页面、截图、公开前端文案和试玩行为得出结论，机器人内部策略只记录“观察事实”和“推断”，不把推断写成规则真相。
+
+**原因：** 用户明确要求模仿 `shengji.org` 快速开始模式并多次试玩。外站核心服务端逻辑不可见，若直接声称复制记分或 AI 算法会失去证据基础。
+
+**影响：** 当前推进项从 `ITER-002` 暂切到 `ITER-018`。第一小闭环只做一键快速机器人局自动开局，因为它直接阻塞试玩；结算文案、自动继续、6 人模式和机器人概率策略进入后续小闭环。
+
+**回滚：** 回滚 `018-shengji-org-benchmark.md`、`todo.md`/`plan.md`/`test-report.md`/`review-notes.md`/`decision-log.md` 中的任务切换，以及后续快速开始相关代码和 E2E 即可恢复到继续 `ITER-002` 的路线。
+
+## 2026-07-22：ITER-018 E2E 共享 seeded server 串行运行
+
+**决策：** Playwright 配置设置 `workers: 1`。
+
+**原因：** 新增 quick-start E2E 后，多个 E2E 文件并行共用同一个 `SHENGJI_TEST_SEED=iter-002` server。并行开局会抢占同一随机流，导致原亮主/反主 smoke 中 host 不再拿到可亮的 `♣2`，测试超时。当前 server 没有 per-test seed 重置接口，串行运行是最小可验证修复。
+
+**影响：** `pnpm test:e2e` 稍慢，但 3 个 chromium E2E 仍在 10 秒内完成；确定性牌序恢复稳定。
+
+**回滚：** 若后续引入 per-test/per-room seed fixture，可移除 `workers: 1` 并把 E2E 重新并行化。
+
+## 2026-07-22：ITER-018 快速开始房间标记保留到结算
+
+**决策：** 快速机器人局自动开局后只清除 `shengji:quickStartPending`，保留 `shengji:quickStartRoom` 到玩家离开房间或主动清理 session。
+
+**原因：** `shengji.org` 快速开始样本在结算后显示自动继续倒计时。本项目如果开局时完全清掉 quick-start session，牌桌结算阶段无法区分“快速机器人局”和“普通邀请房”，要么无法自动继续，要么误伤普通房间。
+
+**影响：** `GameTable.tsx` 只在 `isQuickStartRoom(view.roomCode)` 且 `phase === scoring` 时启动 10 秒倒计时；`查看牌桌`、手动 `下一局` 和 `离开本局` 会清理计时器或 session，普通创建房间不自动续局。
+
+**回滚：** 恢复 `Room.tsx` 开局后调用 `clearQuickStartSession()`，删除 `clearQuickStartPending` / `isQuickStartRoom`、`GameTable.tsx` 自动继续 effect、`ResultModal.tsx` 倒计时展示和相关测试即可回到只自动开局、不自动续局的行为。

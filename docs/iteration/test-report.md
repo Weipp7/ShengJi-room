@@ -379,3 +379,109 @@
 
 - 命令：`pnpm build`
 - 结果：通过，shared/game/bot/server/web 均构建成功。
+
+## ITER-018 Shengji.org 快速开始与牌桌体验基准对齐
+
+### 外站基准采集
+
+- 命令：浏览器自动化打开 `https://shengji.org/`。
+- 结果：首页可见 `快速开始 4人`、`快速开始 6人`、`自定义`、`创建房间 4人`、`创建房间 6人`、旁观列表、加载牌局。
+- 截图：`docs/iteration/artifacts/ITER-018/shengji-org-landing.png`。
+
+- 命令：浏览器自动化点击 `快速开始 4人`。
+- 结果：单击后直接进入 `房间 189837 · 发牌中`，自动补三名机器人，未出现额外“开始游戏”阻塞。
+- 截图：`docs/iteration/artifacts/ITER-018/shengji-org-quick-start-4p.png`。
+
+- 命令：等待 4 人快速开始完成发牌/亮牌/埋底。
+- 结果：进入 `出牌中`；顶部显示 `花色 ♠`、`级牌 2`、`亮牌 机器人 D ♠2`、`闲家 0`、`庄 机器人 D`。
+- 截图：`docs/iteration/artifacts/ITER-018/shengji-org-dealt-bid-state.png`。
+
+- 命令：点击 `💡 提示`。
+- 结果：提示后按钮变为 `出牌(1)`，选择计数从 `0/1` 变为 `1/1`。
+- 截图：`docs/iteration/artifacts/ITER-018/shengji-org-hint-state.png`。
+
+- 命令：连续执行提示后出牌，直到 4 人样本进入结算。
+- 结果：结算页显示 `本局结算`、`庄家小胜 +1级`、`闲家(A队) 基础得分 55分`、`庄家守住底牌 (无扣底)`、`闲家总分 55分`、底牌、`B队 2 → 3`、`下一局庄家: 机器人 B (级牌: 3)`、`10秒后自动继续`。
+- 截图：`docs/iteration/artifacts/ITER-018/shengji-org-auto-play-sample-2.png`。
+
+- 命令：浏览器自动化点击 `快速开始 6人` 并等待进入出牌。
+- 结果：单击后进入牌桌；样本出现 `需要选9张牌` 的多张组合跟牌场景。
+- 截图：
+  - `docs/iteration/artifacts/ITER-018/shengji-org-quick-start-6p.png`
+  - `docs/iteration/artifacts/ITER-018/shengji-org-quick-start-6p-after-wait.png`
+
+### 公开资源检索
+
+- 命令：`curl -L https://shengji.org/ -o /tmp/shengji_org_index.html`
+- 结果：通过，HTML 描述支持 4/6 人模式、AI 机器人随时开局、创建房间邀请好友；前端入口为 `/assets/index-B33RIXKU.js`。
+
+- 命令：`curl -L https://shengji.org/assets/index-B33RIXKU.js -o /tmp/shengji_org_index.js`
+- 结果：通过，bundle 大小 `531947` bytes。
+
+- 命令：`rg -n "快速开始|继续游戏|庄家小胜|闲家总分|扣底|亮牌|反主|提示|机器人|score|level|bid|bury|throw|甩|AI|auto|strategy" /tmp/shengji_org_index.js`
+- 结果：命中外站前端文案，包括快速开始、甩牌失败、结算、造反、三档机器人、高级机器人、出牌提示、保存/加载牌局和更新日志。输出较长，详细结论写入 `018-shengji-org-benchmark.md`。
+
+### 本地第一小闭环计划
+
+- 红测命令：`pnpm test:e2e apps/web/e2e/quick-start.e2e.ts`
+- 红测结果：失败，旧代码 15 秒后仍停在 `4/4 人 ... 开始游戏`，没有进入 `叫主|埋底|出牌|结算`。
+- 修复：`Lobby.tsx` 把快速开始请求写入 session 标记；`Room.tsx` 在快速房间补齐机器人后自动发送一次 `GameStart`；新增 `quickStart.ts` 管理标记生命周期；房间页显示 `正在快速开始，机器人入座中...` / `机器人已补齐，正在开局...`。
+- 复测命令：`pnpm test:e2e apps/web/e2e/quick-start.e2e.ts`
+- 复测结果：通过，2 个 chromium E2E；快速机器人局无需手动开始，普通创建房间仍等待显式开始。
+- 回归命令：`pnpm test apps/web/test/quickStart.test.ts packages/game/test/scoring.test.ts`
+- 回归结果：通过，2 个测试文件，23 个测试。
+- 回归命令：`pnpm test:e2e`
+- 回归结果：通过，3 个 chromium E2E；原亮主/反主 smoke、快速开始、普通创建房间均通过。
+- 失败修复：新增 E2E 后，`pnpm test:e2e` 曾因多个 E2E 文件并行共用 seeded server 导致原亮主/反主测试拿不到预期牌序；修复为 Playwright `workers: 1`，避免共享随机流被并行测试抢占。
+- 本地截图：`docs/iteration/artifacts/ITER-018/screenshots/quick-start-auto-game.png`。
+
+### 本地第二小闭环：结算原因化文案
+
+- 红测命令：`pnpm test apps/web/test/resultModal.test.tsx`
+- 红测结果：失败，旧弹窗不包含 `庄家小胜 +1级` 和 `换庄 (不升级)`。
+- 修复：`apps/web/src/components/ResultModal.tsx` 新增结果条、基础得分、扣底说明和队伍升级说明；使用 `teamOfSeat` 保持庄闲队伍判断与共享规则一致。
+- 复测命令：`pnpm test apps/web/test/resultModal.test.tsx`
+- 复测结果：通过，1 个测试文件，4 个测试。
+
+### 本地第三小闭环：快速机器人局结算自动继续
+
+- 红测命令：`pnpm test apps/web/test/quickStart.test.ts apps/web/test/resultModal.test.tsx`
+- 红测结果：失败，`clearQuickStartPending is not a function`，且弹窗不包含 `10 秒后自动继续`。
+- 修复：`apps/web/src/lib/quickStart.ts` 保留已绑定快速房间标记；`Room.tsx` 自动开局后只清 pending；`GameTable.tsx` 在快速房间结算阶段启动 10 秒倒计时并自动发 `RoundNext`；`ResultModal.tsx` 显示倒计时。
+- 复测命令：`pnpm test apps/web/test/quickStart.test.ts apps/web/test/resultModal.test.tsx`
+- 复测结果：通过，2 个测试文件，8 个测试。
+- E2E 命令：`pnpm test:e2e apps/web/e2e/quick-start.e2e.ts`
+- E2E 失败记录：第一次新增完整局场景时失败于测试正则转义，页面实际已经显示 `闲家小胜 +1级`、`闲家基础得分`、`扣底说明` 和倒计时；修正断言后复测。
+- E2E 复测结果：通过，3 个 chromium E2E，34.2 秒；覆盖一键快速开局、完整一局到解释性结算、普通房间仍需手动开始。
+- 截图：`docs/iteration/artifacts/ITER-018/screenshots/quick-start-explanatory-settlement.png`。
+
+### 本地运行服务验证
+
+- 命令：`lsof -nP -iTCP:5173 -sTCP:LISTEN`
+- 结果：通过，PID `52229` 监听 `http://localhost:5173/`。
+- 命令：`lsof -a -p 52229 -d cwd`
+- 结果：cwd 为 `/Users/weipanyue/shengji/.worktrees/codex-game-iteration-visibility/apps/web`。
+- 命令：`lsof -nP -iTCP:3001 -sTCP:LISTEN`
+- 结果：通过，PID `52240` 监听 `http://localhost:3001/`。
+- 命令：`lsof -a -p 52240 -d cwd`
+- 结果：cwd 为 `/Users/weipanyue/shengji/.worktrees/codex-game-iteration-visibility/apps/server`。
+- 浏览器自动化：打开 `http://localhost:5173/`，填写 `本地试玩员`，点击 `开一桌`。
+- 结果：进入 `叫主` 阶段，`hasManualStartBlocker=false`，没有停在 `开始游戏`。
+- 截图：`docs/iteration/artifacts/ITER-018/screenshots/local-latest-quick-start.png`。
+
+### ITER-018 当前全量回归
+
+- 代码审查修复命令：`pnpm test apps/web/test/resultModal.test.tsx apps/web/test/quickStart.test.ts`
+- 结果：通过，2 个测试文件，9 个测试；覆盖正数扣底不重复计入基础分、快速 session helper 生命周期。
+- 代码审查修复命令：`pnpm test:e2e apps/web/e2e/quick-start.e2e.ts`
+- 结果：通过，3 个 chromium E2E，35.2 秒；普通建房测试预置残留 `shengji:quickStartPending`，仍等待显式开始。
+- 命令：`pnpm test`
+- 结果：通过，30 个测试文件，229 个测试。
+- 命令：`pnpm typecheck`
+- 结果：通过，`pnpm -r exec tsc --noEmit` 无错误。
+- 命令：`pnpm build`
+- 结果：通过，shared/game/bot/server/web 均构建成功。
+- 命令：`pnpm test:e2e`
+- 结果：通过，4 个 chromium E2E，50.1 秒；覆盖两客户端亮牌/反主、快速机器人局自动开局、完整局到解释性结算、普通房间不自动开始。
+- 命令：`git diff --check`
+- 结果：通过，无 whitespace error。
