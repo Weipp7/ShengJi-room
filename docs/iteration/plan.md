@@ -11,8 +11,8 @@
 - 服务端：Express + Socket.IO，入口 `apps/server/src/app.ts` / `index.ts`，房间状态在内存 `RoomManager`。
 - 规则：`packages/game/src/round.ts` 是 round 状态机，`bidding.ts` / `follow.ts` / `trick.ts` / `scoring.ts` 分别处理叫主、跟牌、墩判定、结算。
 - 机器人：`packages/bot` 做叫主/埋底/出牌决策，`apps/server/src/botRunner.ts` 负责延迟调度。
-- 当前分支已有一轮未提交改动，主要围绕亮主/反主可见性、契约摘要、等待反馈、出牌归属、上一墩赢家稳定性。
-- 最新完整验证记录在 `docs/game-iteration/test-report.md`：`pnpm test` 20 文件 145 测试通过、`pnpm typecheck` 通过、`pnpm build` 通过。
+- 当前分支已建立多个可回滚检查点，已完成亮庄/反主扩展、庄前/庄后反牌、机器人亮庄策略、规则边界测试、甩牌惩罚和机器人埋牌策略。
+- 最新完整验证记录在 `docs/iteration/test-report.md`：`pnpm test` 23 文件 187 测试通过、`pnpm typecheck` 通过、`pnpm build` 通过。
 
 ## 阶段拆分
 

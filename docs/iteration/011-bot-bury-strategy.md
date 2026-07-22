@@ -10,7 +10,7 @@ P1
 
 ## 当前状态
 
-Backlog
+Done
 
 ## 背景
 
@@ -71,4 +71,63 @@ Backlog
 
 ## 执行记录
 
-尚未开始。
+2026-07-22 启动实现。第一版目标限定为：
+
+- 保留大王、小王、主花色级牌、主 A 等关键主控。
+- 在可不埋高分、不拆关键对子时，优先埋完整短副门，制造断门。
+- 避免无保护地把 10/K/5 等高分集中埋底。
+- 保持输出 8 张、无重复、全部来自手牌。
+
+## 实现结果
+
+- `packages/bot/src/bury.ts` 从单卡排序扩展为候选组评分：
+  - `cardBuryCost` 继续保护主牌、分牌和对子成员。
+  - `safeVoidGroups` 识别无分、非主、无对子、长度不超过 8 的安全副门。
+  - `dealerProfile` 通过主牌张数和关键主控估算弱庄、均衡庄、强庄。
+  - 弱庄不主动拿断门奖励；均衡庄和强庄只在补足牌也都是低风险单副牌时生成断门候选。
+  - 候选包含默认低风险 8 张，以及“完整埋掉一个安全副门 + 低风险补足”的组合。
+  - `candidateCost` 只对候选明确目标断门给奖励，避免断门奖励外溢到整组底牌。
+  - `explainBury` 返回最终埋牌、庄家强弱估算和候选列表，用于策略审计和测试；玩家 UI 不展示隐藏底牌。
+- `packages/bot/src/play.ts` 在上一轮代码评审中已显式支持跟随 `throw-pairs`，本轮埋牌策略保留该结果。
+
+## 测试记录
+
+### 红测
+
+- `pnpm test -- packages/bot/test/bot.test.ts`
+  - 首次新增测试失败：`prefers voiding a short safe side suit over burying lower scattered cards` 未通过，说明旧策略不会主动断门。
+- `pnpm test -- packages/bot/test/bot.test.ts`
+  - 代码评审后新增测试失败：`does not force a void when the dealer is weak and safe filler is scarce` 未通过，说明第一版断门奖励缺少庄家强弱门槛。
+- `pnpm test -- packages/bot/test/bot.test.ts`
+  - 二次复审后新增测试失败：`does not create a void-bonus candidate when a balanced dealer would need unsafe filler` 初始失败于 `explainBury is not a function`，说明候选层边界缺少可审计接口。
+
+### 当前验证
+
+- `pnpm test -- packages/bot/test/bot.test.ts`
+  - 通过：当前 Vitest 配置下执行 23 个测试文件，187 个测试。
+- `pnpm test -- packages/bot/test/bot.test.ts packages/game/test/scoring.test.ts`
+  - 通过：23 个测试文件，187 个测试。
+- `pnpm test`
+  - 通过：23 个测试文件，187 个测试。
+- `pnpm typecheck`
+  - 通过：`pnpm -r exec tsc --noEmit`。
+- `pnpm build`
+  - 通过：shared/game/bot/web/server 均构建成功；web 产物 `dist/assets/index-LXoFxBzJ.js`，server 产物 `dist/index.js`。
+
+## 多角色评审记录
+
+- 产品/真实玩家视角：bot 庄家现在能在安全时制造断门，减少“明明可以断门却散埋牌”的低级体验。
+- 规则专家：断门候选只在无分、非主、无对子副门上生效；补足牌也必须是低风险单副牌，避免牺牲保底安全。
+- QA：新增固定手牌测试，断言偏好而不锁死完整 8 张排序；新增弱庄不强断、强庄安全断门两个对比场景；保留 200 随机手牌合法性测试。
+- 对抗评审：
+  - 发现：第一版断门奖励按整组候选扣分，读起来可能鼓励用分牌或对子补足 8 张。
+  - 采纳：候选显式携带目标断门，只有目标断门拿奖励；补足牌必须满足非主、无分、非对子成员。
+  - 发现：文档写了庄家强弱策略，但实现没有建模。
+  - 采纳：在 `decideBury` 内部基于主牌长度和关键主控估算弱/均衡/强，不改变外部 API。
+  - 二次复审发现：弱庄测试没有覆盖均衡/强庄下的补牌门槛。
+  - 采纳：新增 `explainBury` 并补候选层测试，断言不安全补牌时不会生成目标断门奖励候选。
+
+## 未处理事项
+
+- 本轮不做长期记牌、底牌风险动态估算或与出牌计划联动；这些进入 `ITER-012` 高级领牌/跟牌策略。
+- 强庄目前只提高安全断门倾向，不主动埋分做进攻；主动埋少量低分需要结合后续领牌/保底策略再评估。

@@ -119,3 +119,13 @@
 **影响：** `ComboType` 新增 `throw-pairs`；`RoundState` 和 `RoomStateView` 新增甩牌事件和队伍惩罚分；结算结果新增基础分和甩牌惩罚差值。成功甩牌首家锁定本墩赢家，失败甩牌按实际落桌对子继续普通墩判定。
 
 **回滚：** 回滚 `packages/game/src/throw.ts`、`round.ts` 中甩牌分支、`follow.ts`/`trick.ts` 的 `throw-pairs` 处理、`scoring.ts` 惩罚分字段、`packages/shared/src/cards.ts`/`state.ts` 新类型，以及对应 UI 和测试改动，即可恢复普通出牌流程。
+
+## 2026-07-22：ITER-011 埋牌断门奖励必须有低风险边界
+
+**决策：** 机器人埋牌候选只对“明确目标断门”给奖励；补足到底牌 8 张的牌必须是非主、无分、非对子成员。弱庄不主动拿断门奖励，均衡庄和强庄才会比较安全断门候选。新增 `explainBury` 返回候选和庄家强弱估算，用于策略审计和测试。
+
+**原因：** 代码评审指出第一版 `candidateCost` 容易被理解为把断门奖励外溢到整组候选，导致为了断门牺牲分牌或对子。虽然当前单卡成本排序已经大幅惩罚分牌、主牌和对子成员，显式边界更容易审计，也能让弱庄策略与强庄策略分开。
+
+**影响：** `decideBury(hand, trump)` 保持外部调用方式不变，内部通过主牌数量和关键主控估算庄家强弱。弱庄更保守，强庄更愿意在补牌安全时制造短门。`explainBury` 只在 bot 包层暴露策略解释，不改变服务端状态机，也不会让玩家 UI 看到隐藏底牌。
+
+**回滚：** 回滚 `packages/bot/src/bury.ts` 中 `DealerProfile`、`BuryCandidate`、`explainBury`、低风险补牌门槛和对应 `packages/bot/test/bot.test.ts` 用例，即可恢复上一版候选评分。

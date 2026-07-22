@@ -14,7 +14,7 @@ import {
   type RoundState,
   type StepResult,
 } from '@shengji/game';
-import { decideBid, decideBury, decidePlay } from '../src/index';
+import { decideBid, decideBury, decidePlay, explainBury } from '../src/index';
 
 function mulberry32(seed: number): () => number {
   let a = seed >>> 0;
@@ -110,6 +110,116 @@ describe('decideBid', () => {
 });
 
 describe('decideBury', () => {
+  it('prefers voiding a short safe side suit over burying lower scattered cards', () => {
+    const trump: TrumpContext = { trumpSuit: 'H', level: 2 };
+    const safeClubVoid = ['C-9-0', 'C-11-0', 'C-12-0', 'C-14-0'];
+    const hand = [
+      ...safeClubVoid.map(cardBy),
+      ...[
+        'D-3-0', 'D-4-0', 'D-6-0', 'D-7-0', 'D-8-0', 'D-9-0', 'D-11-0', 'D-12-0', 'D-14-0',
+        'S-5-0', 'S-10-0', 'S-13-0', 'S-14-0',
+        'H-2-0', 'H-14-0', 'H-13-0', 'H-12-0', 'H-11-0',
+        'joker-small-0', 'joker-big-0',
+        'D-5-0', 'S-6-0', 'S-7-0', 'S-8-0', 'S-9-0', 'S-11-0', 'S-12-0',
+      ].map(cardBy),
+    ];
+
+    const ids = decideBury(hand, trump);
+
+    expect(ids).toHaveLength(8);
+    expect(safeClubVoid.every((id) => ids.includes(id))).toBe(true);
+  });
+
+  it('does not force a void when the dealer is weak and safe filler is scarce', () => {
+    const trump: TrumpContext = { trumpSuit: 'H', level: 2 };
+    const safeClubVoid = ['C-9-0', 'C-11-0', 'C-12-0', 'C-14-0'];
+    const scarceSafeFiller = ['D-3-0', 'D-4-0', 'D-6-0'];
+    const hand = [
+      ...safeClubVoid.map(cardBy),
+      ...scarceSafeFiller.map(cardBy),
+      ...[
+        'S-5-0', 'D-10-0', 'S-10-0', 'D-13-0', 'S-13-0',
+        'S-3-0', 'S-3-1', 'D-7-0', 'D-7-1',
+        'H-3-0', 'H-4-0', 'H-6-0',
+        'S-14-0', 'D-14-0', 'S-12-0', 'D-12-0', 'S-11-0', 'D-11-0',
+        'H-7-0', 'H-8-0',
+        'H-9-0', 'H-10-0',
+      ].map(cardBy),
+    ];
+
+    const ids = decideBury(hand, trump);
+
+    expect(ids).toHaveLength(8);
+    expect(safeClubVoid.every((id) => ids.includes(id))).toBe(false);
+  });
+
+  it('still creates a safe void for a strong dealer when filler cards stay low risk', () => {
+    const trump: TrumpContext = { trumpSuit: 'H', level: 2 };
+    const safeClubVoid = ['C-9-0', 'C-11-0', 'C-12-0', 'C-14-0'];
+    const hand = [
+      ...safeClubVoid.map(cardBy),
+      ...[
+        'D-3-0', 'D-4-0', 'D-6-0', 'D-7-0', 'D-10-0',
+        'S-5-0', 'S-10-0', 'S-13-0',
+        'H-2-0', 'H-2-1', 'H-14-0', 'H-14-1', 'H-13-0', 'H-12-0', 'H-11-0', 'H-10-0',
+        'joker-small-0', 'joker-big-0',
+        'S-3-0', 'S-4-0', 'S-6-0', 'S-7-0', 'S-8-0', 'S-9-0', 'S-11-0', 'S-12-0',
+        'D-14-0', 'D-12-0',
+      ].map(cardBy),
+    ];
+
+    const ids = decideBury(hand, trump);
+
+    expect(ids).toHaveLength(8);
+    expect(safeClubVoid.every((id) => ids.includes(id))).toBe(true);
+  });
+
+  it('does not create a void-bonus candidate when a balanced dealer would need unsafe filler', () => {
+    const trump: TrumpContext = { trumpSuit: 'H', level: 2 };
+    const safeClubVoid = ['C-9-0', 'C-11-0', 'C-12-0', 'C-14-0'];
+    const lowRiskFiller = ['D-3-0', 'D-4-0', 'D-6-0'];
+    const hand = [
+      ...safeClubVoid.map(cardBy),
+      ...lowRiskFiller.map(cardBy),
+      ...[
+        'S-5-0', 'D-10-0', 'S-10-0', 'D-13-0', 'S-13-0',
+        'S-3-0', 'S-3-1', 'D-7-0', 'D-7-1',
+        'H-2-0', 'H-3-0', 'H-4-0', 'H-6-0',
+        'S-4-0', 'S-4-1', 'D-8-0', 'D-8-1', 'S-6-0', 'S-6-1',
+        'H-7-0', 'H-8-0', 'H-9-0',
+      ].map(cardBy),
+    ];
+
+    const plan = explainBury(hand, trump);
+    const targetVoid = safeClubVoid.slice().sort().join('|');
+    const targetCandidate = plan.candidates.find((candidate) =>
+      candidate.voidCardIds?.slice().sort().join('|') === targetVoid
+    );
+
+    expect(plan.profile).toBe('balanced');
+    expect(plan.cardIds).toHaveLength(8);
+    expect(targetCandidate).toBeUndefined();
+  });
+
+  it('keeps key trump controls out of the kitty', () => {
+    const trump: TrumpContext = { trumpSuit: 'H', level: 2 };
+    const keyTrumps = ['joker-big-0', 'joker-small-0', 'H-2-0', 'H-14-0'];
+    const hand = [
+      ...keyTrumps.map(cardBy),
+      ...[
+        'S-3-0', 'S-4-0', 'S-6-0', 'S-7-0', 'S-8-0', 'S-9-0', 'S-11-0', 'S-12-0', 'S-14-0',
+        'C-3-0', 'C-4-0', 'C-6-0', 'C-7-0', 'C-8-0', 'C-9-0', 'C-11-0', 'C-12-0',
+        'D-3-0', 'D-4-0', 'D-6-0', 'D-7-0', 'D-8-0', 'D-9-0', 'D-11-0', 'D-12-0',
+        'S-5-0', 'D-10-0', 'C-13-0',
+      ].map(cardBy),
+    ];
+
+    const ids = decideBury(hand, trump);
+
+    expect(ids).toHaveLength(8);
+    expect(keyTrumps.some((id) => ids.includes(id))).toBe(false);
+  });
+
   it('returns exactly 8 distinct cards from hand (200 random hands)', () => {
     const suits: Suit[] = ['S', 'H', 'D', 'C'];
     for (let i = 0; i < 200; i++) {
