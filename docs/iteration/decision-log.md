@@ -209,3 +209,13 @@
 **影响：** 前端主路径通过 pending 锁避免重复点击；如果仍出现服务端错误，错误卡片会解释“动作可能已经提交或状态变化”。服务端测试覆盖重复 `BidPass`、`TrickPlay` 和 `RoundNext` 不多推进。
 
 **回滚：** 本决策对应的是测试和文档，不改变生产逻辑；如后续引入 action id / stateVersion，可新增服务端幂等表并调整错误展示分级。
+
+## 2026-07-22：ITER-002 使用 Playwright + env-only deterministic hooks
+
+**决策：** E2E 采用 Playwright；确定性通过 `createApp({ rng })` 和 server 入口 env `SHENGJI_TEST_SEED` 注入，不新增测试 HTTP 控制接口。bot 节奏通过 `SHENGJI_BOT_DELAY_MS` 固定。
+
+**原因：** Playwright 能覆盖多 browser context、截图、trace 和真实 DOM 交互；rng 注入比生产暴露 debug endpoint 更安全，也能被 server 单测覆盖。env 未设置时仍走现有 `Math.random` 和默认 bot delay。
+
+**影响：** 新增 `pnpm test:e2e`、`playwright.config.ts`、`apps/web/e2e/*.e2e.ts`、`apps/server/src/testHooks.ts`。Playwright 自动拉起 server `43101` 和 web `45175`，失败产物写入 `docs/iteration/artifacts/ITER-002/` 下的忽略目录，成功截图可提交。
+
+**回滚：** 移除 `@playwright/test`、`playwright.config.ts`、`apps/web/e2e/`、`apps/server/src/testHooks.ts` 和 `createApp`/`gameFlow` 的 rng 参数；删除 `pnpm test:e2e` 脚本和 `.gitignore` 中 Playwright artifact 规则。

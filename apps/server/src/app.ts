@@ -18,6 +18,7 @@ import type {
 } from '@shengji/shared';
 import { C2S, S2C, teamOfSeat } from '@shengji/shared';
 import { sortHand } from '@shengji/game';
+import type { Rng } from '@shengji/game';
 import { loadConfig, type ServerConfig } from './config';
 import { RoomManager, type Room } from './rooms';
 import { advanceToNextRound, handleAction, startGame, type GameAction } from './gameFlow';
@@ -83,6 +84,7 @@ export type AppContext = {
 export type AppOptions = {
   // settling=true 表示机器人正要领出新一墩（客户端在驻留展示上一墩）
   botDelayMs?: (settling: boolean) => number;
+  rng?: Rng;
 };
 
 export function createApp(config: ServerConfig = loadConfig(), opts: AppOptions = {}): AppContext {
@@ -266,7 +268,7 @@ export function createApp(config: ServerConfig = loadConfig(), opts: AppOptions 
       const playerId = socket.data.playerId as string | undefined;
       if (!room || !playerId) return sendError('not-in-room', 'join a room first');
       if (playerId !== room.hostPlayerId) return sendError('not-host', 'only host can start');
-      const res = startGame(room);
+      const res = startGame(room, opts.rng);
       if (!res.ok) return sendError(res.code ?? 'start-error', 'cannot start game');
       manager.touch(room);
       broadcastRoom(room);
@@ -286,7 +288,7 @@ export function createApp(config: ServerConfig = loadConfig(), opts: AppOptions 
       const seat = room.seats.findIndex((s) => s.player?.playerId === playerId);
       if (seat < 0) return sendError('not-seated', 'take a seat first');
       if (room.round?.phase !== 'scoring') return sendError('wrong-phase', 'round not finished');
-      advanceToNextRound(room);
+      advanceToNextRound(room, opts.rng);
       manager.touch(room);
       broadcastRoom(room);
       runBots(room);

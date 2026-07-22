@@ -6,6 +6,7 @@ import {
   createRound,
   type StepResult,
 } from '@shengji/game';
+import type { Rng } from '@shengji/game';
 import type { Room } from './rooms';
 
 export type GameAction = {
@@ -14,14 +15,17 @@ export type GameAction = {
 };
 
 // 开局：4 座全满（真人或机器人）才能发牌
-export function startGame(room: Room): { ok: boolean; code?: 'seats-not-full' | 'wrong-phase' } {
+export function startGame(
+  room: Room,
+  rng: Rng = Math.random,
+): { ok: boolean; code?: 'seats-not-full' | 'wrong-phase' } {
   if (room.phase !== 'waiting') return { ok: false, code: 'wrong-phase' };
   const filled = room.seats.every((s) => s.player !== null || s.bot !== null);
   if (!filled) return { ok: false, code: 'seats-not-full' };
   room.round = createRound({
     plannedDealerSeat: room.plannedDealerSeat,
     teamLevels: room.teamLevels,
-    rng: Math.random,
+    rng,
   });
   room.phase = room.round.phase;
   return { ok: true };
@@ -48,7 +52,7 @@ export function handleAction(room: Room, seat: number, action: GameAction): Step
 }
 
 // scoring → 用结算结果推进级牌/庄家，并发下一局
-export function advanceToNextRound(room: Room): void {
+export function advanceToNextRound(room: Room, rng: Rng = Math.random): void {
   const result = room.round?.phase === 'scoring' ? room.round.result : null;
   if (!result) return;
   room.teamLevels = result.nextLevels;
@@ -56,7 +60,7 @@ export function advanceToNextRound(room: Room): void {
   room.round = createRound({
     plannedDealerSeat: result.nextDealerSeat,
     teamLevels: result.nextLevels,
-    rng: Math.random,
+    rng,
   });
   room.phase = room.round.phase;
 }

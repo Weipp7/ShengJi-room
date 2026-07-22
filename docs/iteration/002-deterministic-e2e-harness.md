@@ -10,7 +10,7 @@ P0。
 
 ## 当前状态
 
-Backlog。
+In Progress。
 
 ## 背景
 
@@ -72,4 +72,50 @@ ITER-000。
 
 ## 执行记录
 
-未开始。
+2026-07-22 启动第一小闭环：Playwright E2E 基础设施和两客户端亮主/反主 smoke。
+
+### 第一小闭环范围
+
+- 引入 `@playwright/test` 和根脚本 `pnpm test:e2e`。
+- 新增 `playwright.config.ts`，自动拉起 deterministic server 和 Vite web。
+- 新增 server 测试 hook：
+  - `SHENGJI_TEST_SEED` 控制发牌随机流；
+  - `SHENGJI_BOT_DELAY_MS` 控制 bot 行动节奏；
+  - 默认未设置 env 时生产路径仍使用 `Math.random` 和原 bot delay。
+- 新增 E2E：两个 browser context 进入同一房间，host 首亮 ♣2，guest 小王反主，两端都能看到亮主/反主、当前主和等待方。
+- 成功截图：
+  - `docs/iteration/artifacts/ITER-002/screenshots/two-context-counter-host.png`
+  - `docs/iteration/artifacts/ITER-002/screenshots/two-context-counter-guest.png`
+
+### 运行方式
+
+```bash
+pnpm test:e2e
+```
+
+该命令使用固定端口：
+
+- server: `http://127.0.0.1:43101`
+- web: `http://127.0.0.1:45175`
+
+失败时 Playwright 产物落在 `docs/iteration/artifacts/ITER-002/test-results/`；HTML report 落在 `docs/iteration/artifacts/ITER-002/playwright-report/`。这两个目录由 `.gitignore` 忽略，成功截图按需提交。
+
+### 第一小闭环验证记录
+
+- 红测/失败 1：`pnpm test:e2e` 因 `3101` 端口已有未知 node 进程监听而失败。处理：不杀外部进程，改用 `43101/45175`。
+- 红测/失败 2：host 视角显示“你 亮主”，非“E2E甲 亮主”。处理：E2E 同时断言本人视角和他人视角文案。
+- 红测/失败 3：guest 的小王反主按钮视觉文案拆成“小单 / 王”，accessibility name 不等于 `王小单`。处理：使用 `button.bid-nt.lit` 点击可用无主反牌按钮，并保留文本断言验证结果。
+- 红测/失败 4：`pnpm test` 把 Playwright `.spec.ts` 当 Vitest 文件收进来。处理：E2E 文件改名为 `.e2e.ts`，Playwright config 设置 `testMatch: '**/*.e2e.ts'`。
+- 通过：`pnpm test:e2e`，1 个 chromium E2E 通过。
+- 通过：`pnpm test`，29 个测试文件，221 个测试。
+- 通过：`pnpm typecheck`。
+- 通过：`pnpm build`。
+
+### 剩余范围
+
+ITER-002 仍未完全完成。后续小闭环继续补：
+
+- 多客户端断线/重连 E2E；
+- 收墩驻留和“上一墩”稳定截图断言；
+- 移动端/紧凑视口响应式截图；
+- fixture 化无人亮主、bot 反主、结算等更多确定性场景。

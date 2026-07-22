@@ -1,9 +1,13 @@
 import { createApp } from './app';
 import { cancelBots } from './botRunner';
 import { loadConfig } from './config';
+import { botDelayFromEnv, seededRngFromEnv } from './testHooks';
 
 const config = loadConfig();
-const { httpServer, manager, detachRoomSockets } = createApp(config);
+const { httpServer, manager, detachRoomSockets } = createApp(config, {
+  botDelayMs: botDelayFromEnv(),
+  rng: seededRngFromEnv(),
+});
 
 httpServer.listen(config.port, () => {
   console.log(`shengji server listening on :${config.port}`);

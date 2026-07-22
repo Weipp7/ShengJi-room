@@ -26,7 +26,7 @@
 | --- | --- | --- | --- | --- | --- | --- |
 | ITER-000 | 基线收敛与分支治理 | P0 | Done | 无 | `000-baseline-governance.md` | 当前 worktree 有大量未提交改动；README 第一版限制；`docs/game-iteration/test-report.md` |
 | ITER-001 | 快速/重复操作的幂等与可理解错误反馈 | P0 | Done | ITER-000 | `001-action-idempotency-error-feedback.md` | `ActionBar.tsx` pending 锁；`ErrorToast.tsx`；`apps/server/test/gameFlow.test.ts` 重复动作断言 |
-| ITER-002 | 确定性 E2E 与多客户端浏览器验证基础设施 | P0 | Backlog | ITER-000 | `002-deterministic-e2e-harness.md` | `docs/game-iteration/test-report.md` 标注浏览器脚本未纳入仓库；UI QA matrix |
+| ITER-002 | 确定性 E2E 与多客户端浏览器验证基础设施 | P0 | In Progress | ITER-000 | `002-deterministic-e2e-harness.md` | `pnpm test:e2e`；`playwright.config.ts`；两 context 亮主/反主截图 |
 | ITER-003 | 卡牌操作无障碍与键盘/触屏一致性 | P0 | Backlog | ITER-002 | `003-card-accessibility.md` | `CardFace.tsx` 使用 clickable div；UI QA P0 |
 | ITER-004 | Bot 调度竞态、取消和驻留节奏测试 | P1 | Backlog | ITER-000 | `004-bot-scheduler-race-coverage.md` | `botRunner.test.ts` 只测 delay range；`botRunner.ts` pending timer |
 | ITER-005 | 规则边界与结算端到端测试补齐 | P1 | Done | ITER-000 | `005-rule-boundary-coverage.md` | rules review: cross-team level, no-trump, broken follow, kitty multiplier |
@@ -65,7 +65,7 @@
 
 当前完成项：`ITER-001 快速/重复操作的幂等与可理解错误反馈`。
 
-下一推进项：`ITER-002 确定性 E2E 与多客户端浏览器验证基础设施`，用于把目前临时浏览器脚本沉淀成可重复验证。
+当前推进项：`ITER-002 确定性 E2E 与多客户端浏览器验证基础设施`。第一小闭环已完成 Playwright 基础设施和两客户端亮主/反主 smoke；后续继续补收墩、响应式、重连和结算 E2E。
 
 ## 已知延期但必须追踪
 

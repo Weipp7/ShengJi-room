@@ -284,3 +284,30 @@
 
 - ITER-001 验收标准已满足：双击主路径被前端阻断，错误可复查，socket 重复包不污染状态。
 - 回滚建议：本轮仅改测试和文档；如需回滚，恢复 `apps/server/test/gameFlow.test.ts` 中新增夹具与三个重复动作测试。
+
+## 2026-07-22：ITER-002 第一小闭环多角色评审
+
+### QA 测试工程师
+
+- 发现：临时浏览器脚本无法复跑，也没有失败 trace。
+- 采纳：新增 `pnpm test:e2e`、Playwright config、trace/screenshot/video retain-on-failure。
+- 发现：Vitest 会收集 `.spec.ts`。
+- 采纳：E2E 文件统一 `.e2e.ts`，Playwright 显式 `testMatch`。
+
+### 工程实现者 / Release Reviewer
+
+- 发现：固定牌序应通过 app options 注入，不能在生产路径暴露调试 HTTP 接口。
+- 采纳：`createApp` 支持 `rng`，server 入口仅在 `SHENGJI_TEST_SEED` env 存在时使用 seeded rng。
+- 发现：bot delay 需要可控，否则 E2E 容易靠 sleep。
+- 采纳：`SHENGJI_BOT_DELAY_MS` 仅作为入口 env hook，默认不影响现有调度。
+
+### 产品经理 / 真实玩家体验官
+
+- 发现：本人视角和其他玩家视角的亮主文案不同，但都合理。
+- 采纳：E2E 同时断言 host 的“你 亮主”和 guest 的“E2E甲 亮主”，并断言反主后双方都看到“小王单张”和当前主变化。
+
+### 对抗评审者
+
+- 发现：直接点可访问名称 `王小单` 不稳定，因为按钮视觉拆成徽标和牌面。
+- 采纳：点击 `button.bid-nt.lit` 表示“当前唯一可用无主反牌按钮”，结果仍通过玩家可见文案验证，避免只测 CSS。
+- 剩余风险：当前只覆盖亮主/反主 smoke，尚未覆盖收墩驻留、响应式、断线重连和结算。

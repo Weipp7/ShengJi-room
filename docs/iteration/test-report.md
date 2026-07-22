@@ -293,3 +293,45 @@
 
 - 命令：`pnpm build`
 - 结果：通过，shared/game/bot/server/web 均构建成功。
+
+## ITER-002 确定性 E2E 与多客户端浏览器验证基础设施
+
+### 第一小闭环：Playwright 两客户端亮主/反主 smoke
+
+#### 失败记录
+
+- 命令：`pnpm test:e2e`
+- 结果：失败，`http://127.0.0.1:3101/healthz is already used`。
+- 修复：不终止未知 node 进程，改用 `43101/45175`。
+
+- 命令：`pnpm test:e2e`
+- 结果：失败，host 本人视角显示 `你 亮主`，测试错误期待 `E2E甲 亮主`。
+- 修复：测试区分本人视角和其他玩家视角。
+
+- 命令：`pnpm test:e2e`
+- 结果：失败，guest 小王反主按钮 accessibility name 不是 `王小单`。
+- 修复：点击稳定的 `button.bid-nt.lit`，并通过结果文案断言反主成功。
+
+- 命令：`pnpm test`
+- 结果：失败，Vitest 收集了 Playwright `.spec.ts`。
+- 修复：E2E 文件改名为 `.e2e.ts`，Playwright config 显式 `testMatch`。
+
+#### 修复后验证
+
+- 命令：`pnpm test:e2e`
+- 结果：通过，1 个 chromium E2E。
+- 覆盖：两个 browser context 进入同一房间，seat0 亮 ♣2，seat1 用小王反主；host/guest 两端都能看到亮主/反主、当前主和等待方。
+
+- 命令：`pnpm test`
+- 结果：通过，29 个测试文件，221 个测试。
+
+- 命令：`pnpm typecheck`
+- 结果：通过，`pnpm -r exec tsc --noEmit` 无错误。
+
+- 命令：`pnpm build`
+- 结果：通过，shared/game/bot/server/web 均构建成功。
+
+#### 截图
+
+- `docs/iteration/artifacts/ITER-002/screenshots/two-context-counter-host.png`
+- `docs/iteration/artifacts/ITER-002/screenshots/two-context-counter-guest.png`

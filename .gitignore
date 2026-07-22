@@ -9,3 +9,5 @@ dist/
 .pnpm-store/
 .worktrees/
 worktrees/
+docs/iteration/artifacts/**/playwright-report/
+docs/iteration/artifacts/**/test-results/
