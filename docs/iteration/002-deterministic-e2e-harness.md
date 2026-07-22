@@ -117,5 +117,26 @@ ITER-002 仍未完全完成。后续小闭环继续补：
 
 - 多客户端断线/重连 E2E；
 - 收墩驻留和“上一墩”稳定截图断言；
-- 移动端/紧凑视口响应式截图；
+- 移动端/更多紧凑视口响应式截图；
 - fixture 化无人亮主、bot 反主、结算等更多确定性场景。
+
+## 第二小闭环：紧凑横屏响应式断言
+
+2026-07-22 完成。
+
+### 范围
+
+- 复用同一个 deterministic 亮主/反主房间，在 `844x390` 横屏视口打开第三个 browser context。
+- 断言紧凑视口下：
+  - document/body 无横向溢出；
+  - `status-bar` / `action-bar` 无横向溢出；
+  - 四个 `.player-badge` 之间没有互相重叠。
+- 生成截图：
+  - `docs/iteration/artifacts/ITER-002/screenshots/two-context-counter-compact.png`
+
+### 发现与修复
+
+- 红测：新增 `.player-badge` bounding-box 互斥断言后，E2E 失败，重叠对为 `E2E甲25 张思考中… / 机器人425 张`。
+- 根因：`max-width: 900px` 横屏布局中 `.player-left` 仍保持 `top: 50%`，短高视口下会与左下角 `.player-bottom` 徽章挤到一起。
+- 修复：紧凑横屏下将 `.player-left` 上移到 `top: 34%`。
+- 验证：`pnpm test:e2e` 通过，截图确认左侧徽章上下分离。

@@ -219,3 +219,13 @@
 **影响：** 新增 `pnpm test:e2e`、`playwright.config.ts`、`apps/web/e2e/*.e2e.ts`、`apps/server/src/testHooks.ts`。Playwright 自动拉起 server `43101` 和 web `45175`，失败产物写入 `docs/iteration/artifacts/ITER-002/` 下的忽略目录，成功截图可提交。
 
 **回滚：** 移除 `@playwright/test`、`playwright.config.ts`、`apps/web/e2e/`、`apps/server/src/testHooks.ts` 和 `createApp`/`gameFlow` 的 rng 参数；删除 `pnpm test:e2e` 脚本和 `.gitignore` 中 Playwright artifact 规则。
+
+## 2026-07-22：ITER-002 紧凑横屏徽章上移优先于缩小文字
+
+**决策：** 在 `max-width: 900px` 横屏布局中，将 `.player-left` 从垂直居中调整到 `top: 34%`，避免与左下 `.player-bottom` 徽章重叠。
+
+**原因：** 红测截图显示重叠不是文字过长造成，而是短高视口内两个绝对定位锚点过近。继续缩小字号会降低可读性，且不能保证不同昵称下不重叠。
+
+**影响：** 紧凑横屏下左侧座位更靠上，给底部玩家和手牌区域留空间。E2E 用 bounding-box 断言固定该约束。
+
+**回滚：** 恢复 `.player-left` 紧凑横屏样式，删除 compact E2E 中的 badge overlap 断言和截图即可。

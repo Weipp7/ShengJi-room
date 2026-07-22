@@ -311,3 +311,22 @@
 - 发现：直接点可访问名称 `王小单` 不稳定，因为按钮视觉拆成徽标和牌面。
 - 采纳：点击 `button.bid-nt.lit` 表示“当前唯一可用无主反牌按钮”，结果仍通过玩家可见文案验证，避免只测 CSS。
 - 剩余风险：当前只覆盖亮主/反主 smoke，尚未覆盖收墩驻留、响应式、断线重连和结算。
+
+## 2026-07-22：ITER-002 第二小闭环响应式评审
+
+### 前端交互评审
+
+- 发现：`844x390` 横屏截图中左侧玩家徽章重叠，虽然页面没有横向溢出。
+- 采纳：E2E 增加 `.player-badge` bounding-box 互斥断言，不只检查 scrollWidth。
+- 修复：紧凑横屏下 `.player-left` 上移到 `top: 34%`，与 `.player-bottom` 分离。
+
+### QA 测试工程师
+
+- 新增断言覆盖 document/body/status/action 无横向溢出。
+- 新增断言覆盖四个玩家徽章互不重叠。
+- 新增 `two-context-counter-compact.png` 截图作为响应式证据。
+
+### Release Reviewer
+
+- 回滚建议：如本轮引发布局回归，可先回滚 CSS 中 `.player-left top: 34%` 和 E2E 的 compact 断言；Playwright 基础设施可保留。
+- 剩余风险：聊天抽屉打开态、长昵称、当前墩多牌、收墩驻留仍未纳入响应式 E2E。

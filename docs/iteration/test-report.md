@@ -335,3 +335,30 @@
 
 - `docs/iteration/artifacts/ITER-002/screenshots/two-context-counter-host.png`
 - `docs/iteration/artifacts/ITER-002/screenshots/two-context-counter-guest.png`
+
+### 第二小闭环：紧凑横屏响应式断言
+
+#### 失败记录
+
+- 命令：`pnpm test:e2e`
+- 结果：失败，新增 `.player-badge` bounding-box 断言捕获重叠：`E2E甲25 张思考中… / 机器人425 张`。
+- 修复：`max-width: 900px` 横屏 CSS 中将 `.player-left` 调整为 `top: 34%`，避开左下角玩家徽章。
+
+#### 修复后验证
+
+- 命令：`pnpm test:e2e`
+- 结果：通过，1 个 chromium E2E。
+- 覆盖：`844x390` 横屏第三 context 可见反主状态；document/body/status/action 无横向溢出；玩家徽章无互相重叠。
+
+- 命令：`pnpm test`
+- 结果：通过，29 个测试文件，221 个测试。
+
+- 命令：`pnpm typecheck`
+- 结果：通过，`pnpm -r exec tsc --noEmit` 无错误。
+
+- 命令：`pnpm build`
+- 结果：通过，shared/game/bot/server/web 均构建成功。
+
+#### 截图
+
+- `docs/iteration/artifacts/ITER-002/screenshots/two-context-counter-compact.png`

@@ -52,6 +52,56 @@ test('two browser contexts observe a deterministic reveal and counter flow', asy
   await host.screenshot({ path: `${artifactDir}/two-context-counter-host.png`, fullPage: true });
   await guest.screenshot({ path: `${artifactDir}/two-context-counter-guest.png`, fullPage: true });
 
+  const compactContext = await browser.newContext({ viewport: { width: 844, height: 390 } });
+  const compact = await compactContext.newPage();
+  await setNickname(compact, 'E2E丙');
+  await compact.getByPlaceholder('房间码').fill(roomCode!);
+  await compact.getByRole('button', { name: '加入' }).last().click();
+  await expect(compact.locator('body')).toContainText('小王单张');
+  await expect(compact.locator('body')).toContainText('反主');
+  const overflow = await compact.evaluate(() => {
+    const actionBar = document.querySelector('.action-bar');
+    const statusBar = document.querySelector('.status-bar');
+    return {
+      viewportWidth: window.innerWidth,
+      documentScrollWidth: document.documentElement.scrollWidth,
+      bodyScrollWidth: document.body.scrollWidth,
+      actionBarClientWidth: actionBar?.clientWidth ?? 0,
+      actionBarScrollWidth: actionBar?.scrollWidth ?? 0,
+      statusBarClientWidth: statusBar?.clientWidth ?? 0,
+      statusBarScrollWidth: statusBar?.scrollWidth ?? 0,
+    };
+  });
+  expect(overflow.documentScrollWidth).toBeLessThanOrEqual(overflow.viewportWidth);
+  expect(overflow.bodyScrollWidth).toBeLessThanOrEqual(overflow.viewportWidth);
+  expect(overflow.actionBarScrollWidth).toBeLessThanOrEqual(overflow.actionBarClientWidth);
+  expect(overflow.statusBarScrollWidth).toBeLessThanOrEqual(overflow.statusBarClientWidth);
+  const overlappingBadges = await compact.evaluate(() => {
+    const badges = [...document.querySelectorAll('.player-badge')].map((el) => {
+      const rect = el.getBoundingClientRect();
+      return {
+        text: el.textContent?.replace(/\s+/g, ' ').trim() ?? '',
+        left: rect.left,
+        right: rect.right,
+        top: rect.top,
+        bottom: rect.bottom,
+      };
+    });
+    const overlaps: string[] = [];
+    for (let i = 0; i < badges.length; i++) {
+      for (let j = i + 1; j < badges.length; j++) {
+        const a = badges[i];
+        const b = badges[j];
+        const separated = a.right <= b.left + 2 || b.right <= a.left + 2 || a.bottom <= b.top + 2 || b.bottom <= a.top + 2;
+        if (!separated) overlaps.push(`${a.text} / ${b.text}`);
+      }
+    }
+    return overlaps;
+  });
+  expect(overlappingBadges).toEqual([]);
+  await compact.screenshot({ path: `${artifactDir}/two-context-counter-compact.png`, fullPage: true });
+
+  await compactContext.close();
   await hostContext.close();
   await guestContext.close();
 });
