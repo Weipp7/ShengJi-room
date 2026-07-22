@@ -400,6 +400,41 @@ describe('round state machine', () => {
     expect(s.throwPenaltyPoints).toEqual([0, 0]);
   });
 
+  it('teammate cards do not fail a throw lead or add penalty', () => {
+    let s = createRound({ plannedDealerSeat: 0, teamLevels: [2, 2], rng: mulberry32(63) });
+    const attempt = [c('S', 5, 0), c('S', 5, 1), c('S', 8, 0), c('S', 8, 1)];
+    s = {
+      ...s,
+      phase: 'playing',
+      biddingStage: null,
+      dealerSeat: 0,
+      trump: { trumpSuit: 'H', level: 2 },
+      hands: [
+        attempt,
+        [c('S', 3, 0), c('S', 3, 1), c('D', 3, 0), c('D', 4, 0)],
+        [c('S', 9, 0), c('S', 9, 1), c('C', 3, 0), c('C', 4, 0)],
+        [c('S', 4, 0), c('S', 4, 1), c('D', 8, 0), c('D', 9, 0)],
+      ],
+      kitty: [],
+      currentTrick: [],
+      lastTrick: [],
+      lastTrickWinnerSeat: null,
+      defenderTrickPoints: 0,
+      throwPenaltyPoints: [0, 0],
+      throwEvents: [],
+      tricksPlayed: 0,
+      turnSeat: 0,
+      result: null,
+    };
+
+    s = expectOk(applyPlay(s, 0, attempt.map((card) => card.id)));
+
+    expect(s.currentTrick[0].cards.map((card) => card.id)).toEqual(attempt.map((card) => card.id));
+    expect(s.currentTrick[0].throwEvent).toMatchObject({ success: true, penaltyPoints: 0 });
+    expect(s.throwPenaltyPoints).toEqual([0, 0]);
+    expect(s.hands[0]).toHaveLength(0);
+  });
+
   it('reveal makes revealer the dealer and sets trump', () => {
     let s = createRound({ plannedDealerSeat: 0, teamLevels: [2, 2], rng: mulberry32(11) });
     // 沿叫主轮次找到第一个持有级牌的座位并亮主

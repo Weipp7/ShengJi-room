@@ -5,7 +5,7 @@
 ### QA / 回归评审
 
 - P0：甩牌失败判定把队友也当成“可压住的人”。
-  - 已记录为 `BUG-017-002`，排在 `BUG-017-001` 后继续处理。
+  - 已修复为 `BUG-017-002`：只检查对手座位，同队队友不触发失败；补规则层和 round 层回归测试。
 - P1：快速重复操作缺少 pending 锁，成功操作后的第二次请求会显示误导性 `wrong-turn/wrong-phase`。
   - 已记录为 `BUG-017-003`，对应 `ITER-001`。
 - P2：跟牌阶段选择 4 张也显示“出牌 / 甩牌”；收墩驻留期间仍可选择手牌。
@@ -23,6 +23,7 @@
 ### Release Reviewer
 
 - 回滚建议：`BUG-017-001` 可按单提交回滚；手工回滚重点是 `apps/web/src/lib/settledReview.ts`、`GameTable.tsx` 和 `apps/web/test/settledReview.test.ts`。
+- 回滚建议：`BUG-017-002` 可按单提交回滚；手工回滚重点是 `packages/game/src/throw.ts`、`packages/game/test/throw.test.ts` 和 `packages/game/test/round.test.ts`。
 - 剩余风险：缺少 `roundId/trickIndex/stateVersion`，无法完美区分“刚结墩”和“重连快照”；当前先用 `currentTrick.length` 阻断最伤体验的错误回放。
 
 ## 2026-07-22：ITER-015 出牌提示按钮与可解释推荐评审

@@ -67,6 +67,32 @@ describe('evaluateThrowLead', () => {
     }
   });
 
+  it('succeeds when only the thrower teammate can beat a thrown pair', () => {
+    const attempt = [c('S', 5, 0), c('S', 5, 1), c('S', 8, 0), c('S', 8, 1)];
+    const result = evaluateThrowLead({
+      seat: 0,
+      cards: attempt,
+      hand: attempt,
+      hands: [
+        attempt,
+        [c('S', 3, 0), c('S', 3, 1)],
+        [c('S', 9, 0), c('S', 9, 1)],
+        [c('D', 9, 0), c('D', 9, 1)],
+      ],
+      trump,
+    });
+
+    expect(result.type).toBe('success');
+    if (result.type === 'success') {
+      expect(result.event).toMatchObject({
+        seat: 0,
+        success: true,
+        penaltyPoints: 0,
+        beneficiaryTeam: null,
+      });
+    }
+  });
+
   it('fails a side-suit pair throw when an opponent has any trump pair', () => {
     const attempt = [c('S', 8, 0), c('S', 8, 1), c('S', 11, 0), c('S', 11, 1)];
     const result = evaluateThrowLead({

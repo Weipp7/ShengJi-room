@@ -83,7 +83,7 @@ In Progress
 | ID | 优先级 | 状态 | 缺陷 | 影响 | 复现入口 | 进入当前迭代 | 建议验证 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | BUG-017-001 | P0 | Done | 重连/刷新后上一墩回放覆盖已经开始的当前墩，并在驻留期间禁用出牌 | 玩家看到旧墩、赢家和当前轮次不一致，直接对应“每墩结束莫名回放上一墩”的体验风险 | 初始 `RoomStateView` 已有 `lastTrick` 四手，同时 `currentTrick.length > 0` 且轮到当前玩家 | 已修 | `pnpm test apps/web/test/settledReview.test.ts apps/web/test/trickArea.test.tsx` |
-| BUG-017-002 | P0 | Ready | 甩牌失败判定把队友也当成“可压住的人” | 合法甩牌被误判失败，实际出牌和罚分错误，污染结算 | seat 0 甩两对，seat 2 队友持有更大同花色对子，敌方无可压对子 | 是；BUG-017-001 后处理 | `pnpm test packages/game/test/throw.test.ts packages/game/test/round.test.ts packages/game/test/scoring.test.ts` |
+| BUG-017-002 | P0 | Done | 甩牌失败判定把队友也当成“可压住的人” | 合法甩牌被误判失败，实际出牌和罚分错误，污染结算 | seat 0 甩两对，seat 2 队友持有更大同花色对子，敌方无可压对子 | 已修 | `pnpm test packages/game/test/throw.test.ts packages/game/test/round.test.ts packages/game/test/scoring.test.ts` |
 | BUG-017-003 | P1 | Backlog | 快速重复点击动作会把成功操作后的第二次请求显示成 `wrong-turn`/`wrong-phase` | 玩家误以为成功操作失败或规则不可信 | 连续双击 `过`、`出牌`、`确认埋牌`、`下一局` | 否；由 ITER-001 专项处理 | `pnpm test apps/server/test/socket.test.ts apps/server/test/gameFlow.test.ts apps/web/test/actionBar.test.tsx` |
 | BUG-017-004 | P1 | Backlog | 失败甩牌后未实际出的尝试牌仍可能保持选中 | 下一次轮到玩家时可能误出残留选择 | 玩家选 4 张甩牌失败，实际只领出其中一对，剩余一对仍在手牌 | 否；与甩牌 UI/选择状态一并处理 | 需要 GameTable 级交互测试或 E2E |
 | BUG-017-005 | P1 | Backlog | 结墩驻留只在客户端和 bot delay 实现，服务端不阻止真人通过 socket 抢跑 | 一个客户端还在看上一墩，另一个客户端已推进下一墩，造成状态跳变 | 第四家落牌后赢家立即发送下一墩 `TrickPlay` | 否；需先决定强制服务端 settle 还是仅前端响应新 `currentTrick` | socket 测试 + 浏览器多客户端 |
@@ -127,4 +127,24 @@ In Progress
 
 ## 下一小闭环
 
-`BUG-017-002`：甩牌失败判定必须只看对手，不能把队友可压住误判为失败。
+已处理 `BUG-017-002`：甩牌失败判定必须只看对手，不能把队友可压住误判为失败。
+
+### BUG-017-002 修复记录
+
+- 红测：
+  - `pnpm test packages/game/test/throw.test.ts`
+  - 失败：只有队友能压住甩出的对子时，旧实现返回 `failure`，期望 `success`。
+  - `pnpm test packages/game/test/throw.test.ts packages/game/test/round.test.ts`
+  - 失败：round 层只落最低对子，期望完整甩牌落桌且无罚分。
+- 实现：
+  - `packages/game/src/throw.ts` 的 `findBeatenPair` 跳过与甩牌者同队的座位，只允许对手触发甩牌失败。
+- 验证：
+  - `pnpm test packages/game/test/throw.test.ts packages/game/test/round.test.ts packages/game/test/scoring.test.ts` 通过，3 个测试文件，40 个测试。
+  - `pnpm test` 通过，26 个测试文件，210 个测试。
+  - `pnpm typecheck` 通过。
+  - `pnpm build` 通过。
+
+## 后续小闭环候选
+
+- `BUG-017-003`：快速重复动作 pending/幂等与错误反馈，已有 `ITER-001` 专项文档。
+- `BUG-017-006`：跟牌阶段不应显示“甩牌”文案，可作为小 UI 文案 bug 独立处理。

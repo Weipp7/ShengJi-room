@@ -56,6 +56,7 @@ function findBeatenPair(args: {
   for (const pair of args.pairs) {
     for (let offset = 1; offset <= 3; offset++) {
       const otherSeat = (args.seat + offset) % 4;
+      if (teamOfSeat(otherSeat) === teamOfSeat(args.seat)) continue;
       const handPairs = findPairs(args.hands[otherSeat] ?? [], args.trump);
       if (handPairs.some((candidate) => canPairBeat(candidate, pair, args.suit, args.trump))) {
         return pair;

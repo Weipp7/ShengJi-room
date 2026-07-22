@@ -133,6 +133,33 @@
 - 命令：`pnpm build`
 - 结果：通过，shared/game/bot/server/web 均构建成功。
 
+### BUG-017-002 队友误触发甩牌失败
+
+#### 红测记录
+
+- 命令：`pnpm test packages/game/test/throw.test.ts`
+- 结果：失败，`succeeds when only the thrower teammate can beat a thrown pair` 收到 `failure`，期望 `success`。
+- 结论：旧实现把队友也当成可挑战甩牌的人。
+
+- 命令：`pnpm test packages/game/test/throw.test.ts packages/game/test/round.test.ts`
+- 结果：失败，round 层只落桌 `S-5` 对，期望完整甩牌 `S-5` 对 + `S-8` 对。
+- 结论：队友误挑战不仅影响规则结果，也会错误改变实际落桌牌和罚分账本。
+
+#### 修复后验证
+
+- 命令：`pnpm test packages/game/test/throw.test.ts packages/game/test/round.test.ts packages/game/test/scoring.test.ts`
+- 结果：通过，3 个测试文件，40 个测试。
+- 覆盖：队友不能触发甩牌失败、对手仍可触发失败、round 层不产生错误罚分、结算规则未回归。
+
+- 命令：`pnpm test`
+- 结果：通过，26 个测试文件，210 个测试。
+
+- 命令：`pnpm typecheck`
+- 结果：通过，`pnpm -r exec tsc --noEmit` 无错误。
+
+- 命令：`pnpm build`
+- 结果：通过，shared/game/bot/server/web 均构建成功。
+
 ### 浏览器验证
 
 - 命令：`pnpm dev`
