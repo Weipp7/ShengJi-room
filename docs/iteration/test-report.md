@@ -269,3 +269,27 @@
 - URL：`http://localhost:5173/`
 - 交互路径：真人领牌回合选中两张不同黑桃 -> 点击 `出牌` -> 服务端返回非法甩牌/非法组合类错误。
 - 结果：DOM 记录 `toastCode=invalid-throw`，错误文本在约 3.95 秒后仍存在，`closeCount=1`；点击 `关闭错误提示` 后 `toastText=""` 且 `closeCount=0`。
+
+### 第三小闭环：socket 级重复动作断言
+
+#### 红测 / 夹具调试记录
+
+- 命令：`pnpm test apps/server/test/gameFlow.test.ts`
+- 结果：失败，新增重复动作测试超时。
+- 结论：测试夹具在最后才让 host 等“全员入座”，可能错过 seat take 广播；不是业务状态机失败。
+- 修复：`createFourHumanRoom` 改为每次 seat take 前先订阅 host 对应座位更新，再发起动作。
+
+#### 修复后验证
+
+- 命令：`pnpm test apps/server/test/gameFlow.test.ts`
+- 结果：通过，1 个测试文件，7 个测试。
+- 覆盖：重复 `BidPass` 只推进到下一家，重复 `TrickPlay` 只落一张牌且只移除一次手牌，重复 `RoundNext` 只推进一局。
+
+- 命令：`pnpm test`
+- 结果：通过，28 个测试文件，218 个测试。
+
+- 命令：`pnpm typecheck`
+- 结果：通过，`pnpm -r exec tsc --noEmit` 无错误。
+
+- 命令：`pnpm build`
+- 结果：通过，shared/game/bot/server/web 均构建成功。

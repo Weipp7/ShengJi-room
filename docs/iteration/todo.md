@@ -25,7 +25,7 @@
 | ID | 功能名称 | 优先级 | 状态 | 依赖 | 详情文档 | 主要证据来源 |
 | --- | --- | --- | --- | --- | --- | --- |
 | ITER-000 | 基线收敛与分支治理 | P0 | Done | 无 | `000-baseline-governance.md` | 当前 worktree 有大量未提交改动；README 第一版限制；`docs/game-iteration/test-report.md` |
-| ITER-001 | 快速/重复操作的幂等与可理解错误反馈 | P0 | In Progress | ITER-000 | `001-action-idempotency-error-feedback.md` | `ActionBar.tsx` 无 in-flight 锁；`apps/server/src/app.ts#act`; rules review P2 |
+| ITER-001 | 快速/重复操作的幂等与可理解错误反馈 | P0 | Done | ITER-000 | `001-action-idempotency-error-feedback.md` | `ActionBar.tsx` pending 锁；`ErrorToast.tsx`；`apps/server/test/gameFlow.test.ts` 重复动作断言 |
 | ITER-002 | 确定性 E2E 与多客户端浏览器验证基础设施 | P0 | Backlog | ITER-000 | `002-deterministic-e2e-harness.md` | `docs/game-iteration/test-report.md` 标注浏览器脚本未纳入仓库；UI QA matrix |
 | ITER-003 | 卡牌操作无障碍与键盘/触屏一致性 | P0 | Backlog | ITER-002 | `003-card-accessibility.md` | `CardFace.tsx` 使用 clickable div；UI QA P0 |
 | ITER-004 | Bot 调度竞态、取消和驻留节奏测试 | P1 | Backlog | ITER-000 | `004-bot-scheduler-race-coverage.md` | `botRunner.test.ts` 只测 delay range；`botRunner.ts` pending timer |
@@ -63,15 +63,17 @@
 
 当前完成项：`ITER-015 出牌提示按钮与可解释推荐`。
 
-当前推进项：`ITER-001 快速/重复操作的幂等与可理解错误反馈`。前端 pending 锁和错误持久化已通过；后续小闭环继续补 socket 级重复动作断言，并评估重复错误是否需要从强错误降级为弱提示。
+当前完成项：`ITER-001 快速/重复操作的幂等与可理解错误反馈`。
+
+下一推进项：`ITER-002 确定性 E2E 与多客户端浏览器验证基础设施`，用于把目前临时浏览器脚本沉淀成可重复验证。
 
 ## 已知延期但必须追踪
 
 - Playwright 或等价 E2E 框架尚未接入仓库；当前浏览器证据来自手工/脚本运行记录。
 - 生产部署仍是单实例内存状态；房间重启清空是 MVP 限制。
 - 完整规则变体未全部决策，尤其是“跨队反主是否切换本局级牌”。
-- 错误提示目前 3 秒自动消失，缺少持久、可复查的错误记录。
+- 错误提示已持久化；仍未引入 action id / stateVersion，因此服务端暂不静默降级 `wrong-turn` / `wrong-phase`。
 - 卡牌是 `div` 点击，不具备按钮语义、焦点态、键盘选择、`aria-pressed`。
 - 亮庄强度、大小王反主和庄前/庄后反牌已有基础规则文档和测试；跨队反主是否切换本局级牌等地方变体仍未决策。
-- 现有 bot 出牌偏保守，缺少针对领牌、跟牌、保分、杀牌、垫牌、甩牌的统一评估器。
+- bot 出牌已有局部评估和解释；主动甩牌、长期记牌和概率推断仍未实现。
 - 甩牌第一版已实现同一有效花色多对子甩牌；混合甩牌、bot 主动甩牌和自动化 E2E fixture 继续由后续任务追踪。

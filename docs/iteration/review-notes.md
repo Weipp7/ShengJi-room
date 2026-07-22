@@ -259,3 +259,28 @@
 
 - 回滚建议：按本轮单提交回滚；手工回滚重点是 `apps/web/src/store.tsx`、`apps/web/src/App.tsx`、`apps/web/src/lib/errors.ts`、`apps/web/src/components/ErrorToast.tsx` 和 toast CSS。
 - 剩余风险：socket 级重复动作断言仍未完成；错误是否需要分级为“强错误/弱提示”进入 ITER-001 后续小闭环。
+
+## 2026-07-22：ITER-001 第三小闭环多角色评审
+
+### 规则专家 / 工程实现者
+
+- 发现：服务端状态机本身已经保证失败动作不落盘，重复包会在新状态下被 `wrong-turn` 或 `wrong-phase` 拒绝。
+- 采纳：不改协议，只补 socket 级断言证明 pass/play/next-round 重复请求不会多推进。
+- 发现：重复 play 的第二包可能是 `wrong-turn` 而不是 `cards-not-in-hand`，取决于第一次成功后 turn 是否切走。
+- 采纳：验收关注“不多出牌、不多删手牌、不多推进”，不绑定具体次要错误码之外的状态安全。
+
+### QA 测试工程师
+
+- 新增 4 真人 socket 夹具，避免 bot 自动动作干扰重复动作断言。
+- 覆盖重复 `BidPass`、重复 `TrickPlay`、重复 `RoundNext`。
+- 夹具调试发现 host 可能错过入座广播，已改为 seat take 前订阅对应更新。
+
+### 对抗评审者
+
+- 发现：没有客户端 action id / stateVersion 时，服务端无法区分“重复包”和“用户在错误阶段真的操作”。
+- 决策：不做服务端静默吞错；由前端 pending 锁消除主路径重复点击，服务端继续暴露真实错误，并由错误文案说明状态可能已变化。
+
+### Release Reviewer
+
+- ITER-001 验收标准已满足：双击主路径被前端阻断，错误可复查，socket 重复包不污染状态。
+- 回滚建议：本轮仅改测试和文档；如需回滚，恢复 `apps/server/test/gameFlow.test.ts` 中新增夹具与三个重复动作测试。

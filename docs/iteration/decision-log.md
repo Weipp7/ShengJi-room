@@ -199,3 +199,13 @@
 **影响：** `wrong-turn` / `wrong-phase` 追加“动作可能已经提交或状态变化”的解释；unknown code 会展示 code 和服务端 message。`GameTable` 的 pending 释放改为监听 `state.error?.id`。
 
 **回滚：** 回滚 `apps/web/src/lib/errors.ts`、`apps/web/src/components/ErrorToast.tsx`、`apps/web/src/store.tsx` 错误对象化、`App.tsx` 顶层错误组件和对应测试/CSS 即可恢复旧 3 秒 toast。
+
+## 2026-07-22：ITER-001 暂不静默服务端重复动作错误
+
+**决策：** 本轮不在服务端静默吞掉 `wrong-turn` / `wrong-phase`，也不把它们统一降级为弱提示；只补 socket 级测试证明重复请求不会重复落盘。
+
+**原因：** 当前协议没有 action id、客户端 stateVersion 或服务端去重窗口，无法可靠判断一个错误是重复包、网络延迟还是玩家真实非法操作。静默处理会掩盖真实规则错误，降低 QA 发现问题的能力。
+
+**影响：** 前端主路径通过 pending 锁避免重复点击；如果仍出现服务端错误，错误卡片会解释“动作可能已经提交或状态变化”。服务端测试覆盖重复 `BidPass`、`TrickPlay` 和 `RoundNext` 不多推进。
+
+**回滚：** 本决策对应的是测试和文档，不改变生产逻辑；如后续引入 action id / stateVersion，可新增服务端幂等表并调整错误展示分级。

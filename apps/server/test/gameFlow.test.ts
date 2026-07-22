@@ -3,7 +3,7 @@ import type { AddressInfo } from 'node:net';
 import { io as clientIo, type Socket as ClientSocket } from 'socket.io-client';
 import type { ChatMessagePayload, RoomStateView } from '@shengji/shared';
 import { C2S, S2C } from '@shengji/shared';
-import { countPoints, detectCombo } from '@shengji/game';
+import { countPoints, createRound, detectCombo } from '@shengji/game';
 import { decideBury, decidePlay } from '@shengji/bot';
 import { createApp } from '../src/app';
 
@@ -55,6 +55,34 @@ function waitState(
     };
     socket.on(S2C.RoomState, handler);
   });
+}
+
+async function createFourHumanRoom(prefix: string): Promise<{
+  code: string;
+  host: ClientSocket;
+  guests: ClientSocket[];
+  all: ClientSocket[];
+}> {
+  const host = await connect();
+  host.emit(C2S.RoomCreate, { nickname: `${prefix}-0`, playerId: `${prefix}-0` });
+  const created = await once<RoomStateView>(host, S2C.RoomState);
+  const guests: ClientSocket[] = [];
+
+  for (const seat of [1, 2, 3]) {
+    const guest = await connect();
+    guest.emit(C2S.RoomJoin, {
+      roomCode: created.roomCode,
+      nickname: `${prefix}-${seat}`,
+      playerId: `${prefix}-${seat}`,
+    });
+    await waitState(guest, (s) => s.roomCode === created.roomCode);
+    const hostSeesSeat = waitState(host, (s) => s.seats[seat].nickname === `${prefix}-${seat}`);
+    guest.emit(C2S.SeatTake, { seat });
+    await Promise.all([waitState(guest, (s) => s.yourSeat === seat), hostSeesSeat]);
+    guests.push(guest);
+  }
+
+  return { code: created.roomCode, host, guests, all: [host, ...guests] };
 }
 
 // 人类玩家自动机：轮到自己就用 bot 决策回发，模拟真实客户端
@@ -163,6 +191,87 @@ describe('game flow orchestration', () => {
     expect(e3.code).toBe('wrong-phase');
     host.close();
     guest.close();
+  });
+
+  it('duplicate pass requests only advance the bidding turn once', async () => {
+    const { code, host, all } = await createFourHumanRoom('dup-pass');
+    const started = waitState(host, (s) => s.phase === 'bidding' && s.biddingTurn === 0);
+    host.emit(C2S.GameStart, {});
+    await started;
+
+    const nextState = waitState(host, (s) => s.phase === 'bidding' && s.biddingTurn === 1);
+    const staleError = once<{ code: string }>(host, S2C.GameError);
+    host.emit(C2S.BidPass, {});
+    host.emit(C2S.BidPass, {});
+
+    const [state, error] = await Promise.all([nextState, staleError]);
+    expect(error.code).toBe('wrong-turn');
+    expect(state.biddingTurn).toBe(1);
+    expect(ctx.manager.rooms.get(code)?.round?.biddingTurn).toBe(1);
+    for (const socket of all) socket.close();
+  });
+
+  it('duplicate play requests only remove the played card once', async () => {
+    const { code, host, all } = await createFourHumanRoom('dup-play');
+    const started = waitState(host, (s) => s.phase === 'bidding');
+    host.emit(C2S.GameStart, {});
+    const initial = await started;
+    const room = ctx.manager.rooms.get(code)!;
+    room.round = {
+      ...createRound({ plannedDealerSeat: 0, teamLevels: [2, 2], rng: () => 0.1 }),
+      phase: 'playing',
+      biddingStage: null,
+      dealerSeat: 0,
+      trump: { trumpSuit: null, level: 2 },
+      turnSeat: 0,
+    };
+    room.phase = 'playing';
+    const cardId = room.round.hands[0][0].id;
+    const beforeCount = room.round.hands[0].length;
+
+    const nextState = waitState(host, (s) => s.phase === 'playing' && s.turnSeat === 1);
+    const staleError = once<{ code: string }>(host, S2C.GameError);
+    host.emit(C2S.TrickPlay, { cardIds: [cardId] });
+    host.emit(C2S.TrickPlay, { cardIds: [cardId] });
+
+    const [state, error] = await Promise.all([nextState, staleError]);
+    expect(error.code).toBe('wrong-turn');
+    expect(initial.roomCode).toBe(code);
+    expect(state.currentTrick).toHaveLength(1);
+    expect(state.currentTrick[0].cards.map((card) => card.id)).toEqual([cardId]);
+    expect(ctx.manager.rooms.get(code)?.round?.hands[0]).toHaveLength(beforeCount - 1);
+    for (const socket of all) socket.close();
+  });
+
+  it('duplicate next-round requests only advance one new round', async () => {
+    const { code, host, all } = await createFourHumanRoom('dup-next');
+    const room = ctx.manager.rooms.get(code)!;
+    const base = createRound({ plannedDealerSeat: 0, teamLevels: [2, 2], rng: () => 0.1 });
+    room.round = {
+      ...base,
+      phase: 'scoring',
+      result: {
+        defenderPoints: 0,
+        kittyCards: [],
+        kittyBonus: 0,
+        winnerTeam: 0,
+        levelDelta: 1,
+        nextDealerSeat: 0,
+        nextLevels: [3, 2],
+      },
+    };
+    room.phase = 'scoring';
+
+    const nextState = waitState(host, (s) => s.phase === 'bidding' && s.teamLevels[0] === 3);
+    const staleError = once<{ code: string }>(host, S2C.GameError);
+    host.emit(C2S.RoundNext, {});
+    host.emit(C2S.RoundNext, {});
+
+    const [state, error] = await Promise.all([nextState, staleError]);
+    expect(error.code).toBe('wrong-phase');
+    expect(state.teamLevels).toEqual([3, 2]);
+    expect(ctx.manager.rooms.get(code)?.teamLevels).toEqual([3, 2]);
+    for (const socket of all) socket.close();
   });
 
   it('start rejected when seats not full or requester not host', async () => {

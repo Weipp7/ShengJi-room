@@ -10,7 +10,7 @@ P0。
 
 ## 当前状态
 
-In Progress。
+Done。
 
 ## 背景
 
@@ -115,3 +115,20 @@ ITER-000。
 - 代码：收到新的 `RoomStateView` 自动清除旧错误；`leaveRoom` / `RoomEnded` reset 也清除错误。
 - 浏览器验证：真人领牌回合选择两张不同黑桃提交，收到 `invalid-throw` 错误；等待约 3.95 秒后错误仍显示，点击“关闭错误提示”后消失。
 - 剩余范围：socket 级重复动作断言还未沉淀为稳定测试；重复错误是否静默降级为弱提示仍需结合服务端错误上下文继续评估。
+
+## 第三小闭环计划
+
+1. 服务端测试：同一 socket 连续发送两次 `BidPass`，只允许第一次推进 bidding turn。
+2. 服务端测试：同一 socket 连续发送两次 `TrickPlay`，只允许第一次移除手牌并落入当前墩。
+3. 服务端测试：同一 socket 连续发送两次 `RoundNext`，只允许第一次推进新一局。
+4. 评估：重复错误是否应静默或降级为弱提示。
+5. 回归：全量测试、类型检查和构建。
+
+## 第三小闭环结果
+
+2026-07-22 完成。
+
+- 测试：`apps/server/test/gameFlow.test.ts` 新增 4 真人 socket 夹具，覆盖重复 `pass`、重复 `play` 和重复 `next-round`。
+- 结果：服务端保持状态安全；重复 `pass` 返回 `wrong-turn`，重复 `play` 返回 `wrong-turn` 且手牌只少一张，重复 `next-round` 返回 `wrong-phase` 且级牌只推进一次。
+- 决策：暂不把服务端 `wrong-turn` / `wrong-phase` 静默降级为弱提示。没有 action id 或客户端状态版本时，服务端无法可靠区分“重复包”和“真实非法操作”；前端 pending 锁已解决主路径误点，错误文案已补上下文。
+- 状态：ITER-001 验收标准全部满足，后续若引入 action id / stateVersion，再评估服务端级幂等去重。
