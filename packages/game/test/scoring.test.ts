@@ -75,6 +75,40 @@ describe('settleRound', () => {
     expect(res.nextLevels).toEqual([2, 3]);
   });
 
+  it('adds dealer-team failed throw penalties to defender effective points', () => {
+    const res = settleRound({
+      dealerSeat: 0,
+      defenderTrickPoints: 40,
+      kitty: [],
+      lastTrickWinnerSeat: 0,
+      lastTrickCardsPerPlayer: 1,
+      teamLevels: [2, 2],
+      throwPenaltyPoints: [0, 40],
+    });
+
+    expect(res.baseDefenderPoints).toBe(40);
+    expect(res.throwPenaltyDelta).toBe(40);
+    expect(res.defenderPoints).toBe(80);
+    expect(res.winnerTeam).toBe(1);
+  });
+
+  it('subtracts defender-team failed throw penalties from defender effective points without going below zero', () => {
+    const res = settleRound({
+      dealerSeat: 0,
+      defenderTrickPoints: 20,
+      kitty: [],
+      lastTrickWinnerSeat: 1,
+      lastTrickCardsPerPlayer: 1,
+      teamLevels: [2, 2],
+      throwPenaltyPoints: [60, 0],
+    });
+
+    expect(res.baseDefenderPoints).toBe(20);
+    expect(res.throwPenaltyDelta).toBe(-60);
+    expect(res.defenderPoints).toBe(0);
+    expect(res.winnerTeam).toBe(0);
+  });
+
   it('defenders reach exactly 80 → change dealer without level up', () => {
     const res = settleRound({
       dealerSeat: 2,

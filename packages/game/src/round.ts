@@ -1,10 +1,11 @@
-import type { Bid, BiddingStage, Card, Rank, RoundResultView, TrumpContext } from '@shengji/shared';
+import type { Bid, BiddingStage, Card, Rank, RoundResultView, ThrowEventView, TrumpContext } from '@shengji/shared';
 import { KITTY_SIZE, SEAT_COUNT, teamOfSeat } from '@shengji/shared';
 import { bidBeats, detectBid, trumpSuitOfBid } from './bidding';
 import { buildDeck, deal, shuffle, type Rng } from './deck';
 import { validateFollow, validateLead } from './follow';
 import { countPoints } from './points';
 import { settleRound } from './scoring';
+import { evaluateThrowLead } from './throw';
 import { trickWinner, type TrickPlay } from './trick';
 
 export type RoundPhase = 'bidding' | 'burying' | 'playing' | 'scoring';
@@ -27,6 +28,8 @@ export type RoundState = {
   currentTrick: TrickPlay[];
   lastTrick: TrickPlay[];
   lastTrickWinnerSeat: number | null;
+  throwEvents: ThrowEventView[];
+  throwPenaltyPoints: [number, number];
   defenderTrickPoints: number;
   tricksPlayed: number;
   result: RoundResultView | null;
@@ -62,6 +65,8 @@ export function createRound(opts: {
     currentTrick: [],
     lastTrick: [],
     lastTrickWinnerSeat: null,
+    throwEvents: [],
+    throwPenaltyPoints: [0, 0],
     defenderTrickPoints: 0,
     tricksPlayed: 0,
     result: null,
@@ -178,24 +183,54 @@ export function applyPlay(s: RoundState, seat: number, cardIds: string[]): StepR
   if (s.phase !== 'playing') return fail('wrong-phase', `cannot play in ${s.phase}`);
   if (seat !== s.turnSeat) return fail('wrong-turn', `not seat ${seat}'s turn`);
   const hand = s.hands[seat];
-  const cards = resolveCards(hand, cardIds);
-  if (cards === null) return fail('cards-not-in-hand', 'played cards must come from hand');
+  const selectedCards = resolveCards(hand, cardIds);
+  if (selectedCards === null) return fail('cards-not-in-hand', 'played cards must come from hand');
 
   const leadCombo = s.currentTrick.length > 0 ? s.currentTrick[0].combo : null;
-  const check =
-    leadCombo === null
-      ? validateLead(cards, hand, s.trump)
-      : validateFollow(leadCombo, cards, hand, s.trump);
-  if (!check.ok) return fail(check.code, 'illegal play');
+  let cards = selectedCards;
+  let combo = null as TrickPlay['combo'];
+  let throwEvent: ThrowEventView | undefined;
+  let throwEvents = s.throwEvents;
+  let throwPenaltyPoints = s.throwPenaltyPoints;
 
-  const playedIds = new Set(cardIds);
+  if (leadCombo === null) {
+    const check = validateLead(selectedCards, hand, s.trump);
+    if (check.ok) {
+      combo = check.combo;
+    } else if (check.code === 'invalid-combo') {
+      const evaluated = evaluateThrowLead({
+        seat,
+        cards: selectedCards,
+        hand,
+        hands: s.hands,
+        trump: s.trump,
+      });
+      if (evaluated.type === 'not-throw') return fail(evaluated.code, 'illegal play');
+      combo = evaluated.combo;
+      throwEvent = evaluated.event;
+      throwEvents = [...s.throwEvents, evaluated.event];
+      if (evaluated.type === 'failure') {
+        cards = evaluated.actualCards;
+        throwPenaltyPoints = [...s.throwPenaltyPoints] as [number, number];
+        throwPenaltyPoints[evaluated.event.beneficiaryTeam!] += evaluated.event.penaltyPoints;
+      }
+    } else {
+      return fail(check.code, 'illegal play');
+    }
+  } else {
+    const check = validateFollow(leadCombo, selectedCards, hand, s.trump);
+    if (!check.ok) return fail(check.code, 'illegal play');
+    combo = check.combo;
+  }
+
+  const playedIds = new Set(cards.map((card) => card.id));
   const hands = s.hands.map((h, i) => (i === seat ? h.filter((card) => !playedIds.has(card.id)) : h));
-  const currentTrick = [...s.currentTrick, { seat, cards, combo: check.combo }];
+  const currentTrick = [...s.currentTrick, { seat, cards, combo, ...(throwEvent ? { throwEvent } : {}) }];
 
   if (currentTrick.length < SEAT_COUNT) {
     return {
       ok: true,
-      state: { ...s, hands, currentTrick, turnSeat: (seat + 1) % SEAT_COUNT },
+      state: { ...s, hands, currentTrick, throwEvents, throwPenaltyPoints, turnSeat: (seat + 1) % SEAT_COUNT },
     };
   }
 
@@ -213,6 +248,8 @@ export function applyPlay(s: RoundState, seat: number, cardIds: string[]): StepR
     currentTrick: [],
     lastTrick: currentTrick,
     lastTrickWinnerSeat: winner,
+    throwEvents,
+    throwPenaltyPoints,
     defenderTrickPoints,
     tricksPlayed,
     turnSeat: winner,
@@ -228,6 +265,7 @@ export function applyPlay(s: RoundState, seat: number, cardIds: string[]): StepR
     lastTrickWinnerSeat: winner,
     lastTrickCardsPerPlayer: currentTrick[0].cards.length,
     teamLevels: s.teamLevels,
+    throwPenaltyPoints,
   });
   return { ok: true, state: { ...base, phase: 'scoring', result } };
 }

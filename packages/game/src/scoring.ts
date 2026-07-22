@@ -36,13 +36,18 @@ export type RoundInput = {
   lastTrickWinnerSeat: number;
   lastTrickCardsPerPlayer: number;
   teamLevels: [Rank, Rank];
+  throwPenaltyPoints?: [number, number];
 };
 
 export function settleRound(input: RoundInput): RoundResultView {
   const dealerTeam = teamOfSeat(input.dealerSeat);
+  const defenderTeam = (1 - dealerTeam) as 0 | 1;
   const lastByDefender = teamOfSeat(input.lastTrickWinnerSeat) !== dealerTeam;
   const bonus = kittyBonus(input.kitty, input.lastTrickCardsPerPlayer, lastByDefender);
-  const defenderPoints = input.defenderTrickPoints + bonus;
+  const baseDefenderPoints = input.defenderTrickPoints + bonus;
+  const throwPenaltyPoints = input.throwPenaltyPoints ?? [0, 0];
+  const throwPenaltyDelta = throwPenaltyPoints[defenderTeam] - throwPenaltyPoints[dealerTeam];
+  const defenderPoints = Math.max(0, baseDefenderPoints + throwPenaltyDelta);
 
   const row = ROUND_SCORE_TABLE.find((r) => defenderPoints >= r.min && defenderPoints <= r.max);
   if (!row) throw new Error(`no score row for ${defenderPoints}`);
@@ -58,6 +63,9 @@ export function settleRound(input: RoundInput): RoundResultView {
 
   return {
     defenderPoints,
+    baseDefenderPoints,
+    throwPenaltyDelta,
+    throwPenaltyPoints,
     kittyCards: input.kitty,
     kittyBonus: bonus,
     winnerTeam,

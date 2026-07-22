@@ -55,6 +55,7 @@ const ERROR_TEXT: Record<string, string> = {
   'invalid-bid': '亮主不合法',
   'cards-not-in-hand': '所选牌不在手牌中',
   'invalid-combo': '所选牌不构成合法牌型（单张/对子/拖拉机）',
+  'invalid-throw': '甩牌必须是同一花色的两个以上非连续对子',
   'wrong-count': '出牌张数必须与领出相同',
   'must-follow-suit': '必须跟随领出花色',
   'must-play-pair': '有对子时必须出对子',

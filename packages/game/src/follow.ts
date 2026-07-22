@@ -49,7 +49,14 @@ export function validateFollow(
   if (suitInPlay.length < requiredSuitCount) return { ok: false, code: 'must-follow-suit' };
 
   // 手牌足够跟满该花色时才附加牌型强制
-  if (suitInHand.length >= lead.cards.length) {
+  if (lead.type === 'throw-pairs') {
+    const thrownPairCount = lead.cards.length / 2;
+    const availablePairs = findPairs(suitInHand, trump).length;
+    const requiredPairs = Math.min(availablePairs, thrownPairCount);
+    if (countPairsAmong(suitInPlay) < requiredPairs) {
+      return { ok: false, code: 'must-play-pair' };
+    }
+  } else if (suitInHand.length >= lead.cards.length) {
     if (lead.type === 'tractor') {
       const pairLen = lead.cards.length / 2;
       const tractors = findTractors(suitInHand, trump, pairLen);

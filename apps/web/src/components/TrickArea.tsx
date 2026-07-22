@@ -16,6 +16,13 @@ function playOf(trick: TrickPlayView[], seat: number): TrickPlayView | undefined
   return trick.find((p) => p.seat === seat);
 }
 
+function throwLabel(play: TrickPlayView): string | null {
+  const event = play.throwEvent;
+  if (!event) return null;
+  if (event.success) return `甩牌成功 · ${event.n} 个对子`;
+  return `甩牌失败 · 实际领出 · -${event.penaltyPoints}`;
+}
+
 // 中央出牌区：十字布局展示本墩四家出牌，左上角按钮按需展开回看上一墩
 export default function TrickArea({ view, settled }: Props) {
   const anchor = view.yourSeat ?? 0;
@@ -23,6 +30,7 @@ export default function TrickArea({ view, settled }: Props) {
   const trick = settled ? settled.plays : view.currentTrick;
   const winnerName =
     settled && settled.winnerSeat !== null ? view.seats[settled.winnerSeat]?.nickname : null;
+  const lastThrowEvent = view.lastTrick.find((play) => play.throwEvent)?.throwEvent;
   return (
     <div className={`trick-area ${settled ? 'settled' : ''}`}>
       {POSITIONS.map((pos, i) => {
@@ -42,6 +50,11 @@ export default function TrickArea({ view, settled }: Props) {
             <div className="trick-slot-cards">
               {play?.cards.map((card) => <CardFace key={card.id} card={card} small />)}
             </div>
+            {play && throwLabel(play) && (
+              <span className={`throw-play-tag ${play.throwEvent?.success ? 'success' : 'failure'}`}>
+                {throwLabel(play)}
+              </span>
+            )}
           </div>
         );
       })}
@@ -77,6 +90,11 @@ export default function TrickArea({ view, settled }: Props) {
           <button className="last-trick-toggle" onClick={() => setLastOpen((v) => !v)}>
             {lastOpen ? '收起' : '上一墩'}
           </button>
+          {!lastOpen && lastThrowEvent && (
+            <span className={`last-trick-throw-summary ${lastThrowEvent.success ? 'success' : 'failure'}`}>
+              上一墩{lastThrowEvent.success ? '甩牌成功' : `甩牌失败 -${lastThrowEvent.penaltyPoints}`}
+            </span>
+          )}
           {lastOpen && (
             <div className="last-trick">
               {view.lastTrick.map((play) => (
@@ -85,6 +103,11 @@ export default function TrickArea({ view, settled }: Props) {
                   {play.cards.map((card) => (
                     <CardFace key={card.id} card={card} small />
                   ))}
+                  {play.throwEvent && (
+                    <span className={`last-trick-throw-tag ${play.throwEvent.success ? 'success' : 'failure'}`}>
+                      上一墩{play.throwEvent.success ? '甩牌成功' : `甩牌失败 -${play.throwEvent.penaltyPoints}`}
+                    </span>
+                  )}
                 </div>
               ))}
             </div>

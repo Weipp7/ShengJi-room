@@ -40,7 +40,7 @@
 | ITER-013 | 任意张数亮庄、大小王反主与亮牌强度模型 | P0 | Done | ITER-000 | `013-flexible-reveal-counter-rules.md` | 用户新增目标；现有 `BidDeclaration.cards` 与 `BidStrength` 只覆盖单张/对子 |
 | ITER-014 | 庄前反牌与庄后反牌阶段 | P0 | Done | ITER-013 | `014-pre-post-dealer-counter-phases.md` | 用户新增目标；`packages/game/src/round.ts`; bidding -> bury -> play 状态机 |
 | ITER-015 | 出牌提示按钮与可解释推荐 | P1 | Backlog | ITER-012 | `015-play-hint-button.md` | 用户新增目标；`ActionBar.tsx`; `HandFan.tsx`; bot play evaluator |
-| ITER-016 | 甩牌功能与失败惩罚结算 | P0 | Ready | ITER-005, ITER-013 | `016-throw-play-and-penalty.md` | 用户新增目标；combo/follow/trick/scoring 规则链路 |
+| ITER-016 | 甩牌功能与失败惩罚结算 | P0 | Done | ITER-005, ITER-013 | `016-throw-play-and-penalty.md` | 用户新增目标；combo/follow/trick/scoring 规则链路 |
 | ITER-017 | 扩展功能缺陷池与回归修复流程 | P0 | Ready | ITER-000 | `017-bugfix-regression-pool.md` | 用户新增目标“多项 bug 修复”；当前体验 review 与测试缺口 |
 
 ## 当前推进项
@@ -55,7 +55,9 @@
 
 当前完成项：`ITER-005 规则边界与结算端到端测试补齐`。
 
-下一项：`ITER-016 甩牌功能与失败惩罚结算`。原因是规则边界测试已经补齐，甩牌会影响 follow/trick/scoring/round 的核心链路，优先于埋牌和领牌策略落地。
+当前完成项：`ITER-016 甩牌功能与失败惩罚结算`。
+
+下一项：`ITER-011 机器人埋牌策略升级`。原因是甩牌和结算规则已经落地，埋牌策略可以基于新的风险模型继续推进。
 
 ## 已知延期但必须追踪
 
@@ -66,4 +68,4 @@
 - 卡牌是 `div` 点击，不具备按钮语义、焦点态、键盘选择、`aria-pressed`。
 - 现有亮庄强度模型只显式覆盖单张和对子，任意张数亮牌、大小王跨级反主、庄前/庄后反牌还没有规则文档和测试。
 - 现有 bot 出牌偏保守，缺少针对领牌、跟牌、保分、杀牌、垫牌、甩牌的统一评估器。
-- 甩牌失败惩罚会影响本墩得分和结算信任，必须先以规则测试锁住行为再接 UI。
+- 甩牌第一版已实现同一有效花色多对子甩牌；混合甩牌、bot 主动甩牌和自动化 E2E fixture 继续由后续任务追踪。

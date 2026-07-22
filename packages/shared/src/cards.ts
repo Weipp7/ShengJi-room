@@ -11,13 +11,14 @@ export type TrumpContext = { trumpSuit: Suit | null; level: Rank };
 
 export type EffectiveSuit = Suit | 'trump';
 
-export type ComboType = 'single' | 'pair' | 'tractor';
+export type ComboType = 'single' | 'pair' | 'tractor' | 'throw-pairs';
 
 export type Combo = {
   type: ComboType;
   cards: Card[];
   suit: EffectiveSuit;
   strength: number;
+  components?: Combo[];
 };
 
 export type BidKind =

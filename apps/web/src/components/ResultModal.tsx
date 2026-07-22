@@ -14,6 +14,10 @@ export default function ResultModal({ view, onNextRound, onDismiss }: Props) {
   if (!r) return null;
   const winnerText = r.winnerTeam === 0 ? '蓝队（0/2 号位）' : '红队（1/3 号位）';
   const nextDealer = view.seats[r.nextDealerSeat];
+  const throwDelta = r.throwPenaltyDelta ?? 0;
+  const throwPenaltyPoints = r.throwPenaltyPoints ?? [0, 0];
+  const hasThrowPenaltyLedger = throwPenaltyPoints.some((points) => points > 0);
+  const baseDefenderPoints = r.baseDefenderPoints ?? r.defenderPoints - throwDelta;
   return (
     <div className="modal-mask">
       <div className="modal">
@@ -22,6 +26,21 @@ export default function ResultModal({ view, onNextRound, onDismiss }: Props) {
           <span>闲家总分</span>
           <b className="points">{r.defenderPoints}</b>
         </div>
+        {(hasThrowPenaltyLedger || throwDelta !== 0 || baseDefenderPoints !== r.defenderPoints) && (
+          <>
+            <div className="result-row">
+              <span>基础牌分</span>
+              <b className="points">{baseDefenderPoints}</b>
+            </div>
+            <div className="result-row">
+              <span>甩牌惩罚</span>
+              <b className="points">
+                蓝队 {throwPenaltyPoints[0]} / 红队 {throwPenaltyPoints[1]}，净 {throwDelta > 0 ? '+' : ''}
+                {throwDelta}
+              </b>
+            </div>
+          </>
+        )}
         {r.kittyBonus > 0 && (
           <div className="result-row">
             <span>其中扣底</span>

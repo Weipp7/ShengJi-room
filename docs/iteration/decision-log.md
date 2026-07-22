@@ -109,3 +109,13 @@
 **影响：** 测试数增加，生产代码不变。
 
 **回滚：** 删除 `packages/game/test/follow.test.ts` 和 `packages/game/test/round.test.ts` 中本轮新增测试即可回滚。
+
+## 2026-07-22：ITER-016 甩牌第一版限定为非拖拉机多对子
+
+**决策：** 第一版甩牌只支持首家领出时“同一有效花色的两个或以上对子，且整组不是普通拖拉机”。`n` 定义为尝试甩出的对子数，失败惩罚为 `20 * n`。任一对手能以更大同花色对子或主对子压住任一子对子即失败；失败后只实际领出最低且可被压住的对子，其余尝试牌留在手牌。
+
+**原因：** 该范围能覆盖升级中最核心、最容易解释的甩牌场景，同时避免把混合单张、对子加拖拉机、跨花色等地方变体一次性塞进现有 `Combo`/`follow`/`trickWinner` 链路。规则专家评审认为这是最小且可审计的实现。
+
+**影响：** `ComboType` 新增 `throw-pairs`；`RoundState` 和 `RoomStateView` 新增甩牌事件和队伍惩罚分；结算结果新增基础分和甩牌惩罚差值。成功甩牌首家锁定本墩赢家，失败甩牌按实际落桌对子继续普通墩判定。
+
+**回滚：** 回滚 `packages/game/src/throw.ts`、`round.ts` 中甩牌分支、`follow.ts`/`trick.ts` 的 `throw-pairs` 处理、`scoring.ts` 惩罚分字段、`packages/shared/src/cards.ts`/`state.ts` 新类型，以及对应 UI 和测试改动，即可恢复普通出牌流程。

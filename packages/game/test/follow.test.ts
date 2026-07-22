@@ -146,4 +146,20 @@ describe('validateFollow', () => {
     expect(res.ok).toBe(true);
     if (res.ok) expect(res.combo).toBeNull();
   });
+
+  it('throw-pairs lead forces as many same-suit pairs as available', () => {
+    const lead = {
+      type: 'throw-pairs' as const,
+      suit: 'S' as const,
+      cards: [c('S', 9, 0), c('S', 9, 1), c('S', 12, 0), c('S', 12, 1)],
+      strength: 12,
+    };
+    const hand = [c('S', 3, 0), c('S', 3, 1), c('S', 4, 0), c('S', 7, 0), c('S', 8, 0)];
+
+    expect(validateFollow(lead, [c('S', 3, 0), c('S', 4, 0), c('S', 7, 0), c('S', 8, 0)], hand, trump)).toMatchObject({
+      ok: false,
+      code: 'must-play-pair',
+    });
+    expect(validateFollow(lead, [c('S', 3, 0), c('S', 3, 1), c('S', 4, 0), c('S', 7, 0)], hand, trump).ok).toBe(true);
+  });
 });

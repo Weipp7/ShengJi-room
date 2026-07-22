@@ -12,10 +12,26 @@ export type SeatView = {
   handCount: number;
 };
 
-export type TrickPlayView = { seat: number; cards: Card[] };
+export type ThrowEventView = {
+  id: string;
+  seat: number;
+  attemptedCards: Card[];
+  actualCards: Card[];
+  challengedCards: Card[];
+  success: boolean;
+  n: number;
+  penaltyPoints: number;
+  beneficiaryTeam: 0 | 1 | null;
+  reason: 'beatable-pair' | null;
+};
+
+export type TrickPlayView = { seat: number; cards: Card[]; throwEvent?: ThrowEventView };
 
 export type RoundResultView = {
   defenderPoints: number;
+  baseDefenderPoints: number;
+  throwPenaltyDelta: number;
+  throwPenaltyPoints: [number, number];
   kittyCards: Card[];
   kittyBonus: number;
   winnerTeam: 0 | 1;
@@ -41,6 +57,8 @@ export type RoomStateView = {
   currentTrick: TrickPlayView[];
   lastTrick: TrickPlayView[];
   lastTrickWinnerSeat: number | null;
+  throwEvents: ThrowEventView[];
+  throwPenaltyPoints: [number, number];
   defenderPoints: number;
   teamLevels: [Rank, Rank];
   roundResult: RoundResultView | null;

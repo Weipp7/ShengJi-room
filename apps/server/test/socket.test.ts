@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import type { AddressInfo } from 'node:net';
 import { io as clientIo, type Socket as ClientSocket } from 'socket.io-client';
-import type { RoomStateView } from '@shengji/shared';
+import type { RoomStateView, ThrowEventView } from '@shengji/shared';
 import { C2S, S2C } from '@shengji/shared';
 import { createRound } from '@shengji/game';
 import type { Room } from '../src/rooms';
@@ -277,5 +277,53 @@ describe('socket lifecycle', () => {
     };
 
     expect(projectRoomState(room, 'hold-p0').lastTrickWinnerSeat).toBe(1);
+  });
+
+  it('projects throw events and effective penalty-adjusted defender points', () => {
+    const base = createRound({ plannedDealerSeat: 0, teamLevels: [2, 2], rng: () => 0.1 });
+    const throwEvent: ThrowEventView = {
+      id: 'throw-projected',
+      seat: 0,
+      attemptedCards: [base.hands[0][0], base.hands[0][1], base.hands[0][2], base.hands[0][3]],
+      actualCards: [base.hands[0][0], base.hands[0][1]],
+      challengedCards: [base.hands[0][0], base.hands[0][1]],
+      success: false,
+      n: 2,
+      penaltyPoints: 40,
+      beneficiaryTeam: 1,
+      reason: 'beatable-pair',
+    };
+    const room: Room = {
+      code: 'THRW1',
+      password: null,
+      hostPlayerId: 'throw-p0',
+      seats: [
+        { player: { playerId: 'throw-p0', nickname: 'P0', socketId: null, connected: true }, bot: null },
+        { player: null, bot: { name: '机器人2' } },
+        { player: null, bot: { name: '机器人3' } },
+        { player: null, bot: { name: '机器人4' } },
+      ],
+      phase: 'playing',
+      plannedDealerSeat: 0,
+      teamLevels: [2, 2],
+      spectators: [],
+      createdAt: Date.now(),
+      lastActiveAt: Date.now(),
+      round: {
+        ...base,
+        phase: 'playing',
+        dealerSeat: 0,
+        currentTrick: [{ seat: 0, cards: throwEvent.actualCards, combo: null, throwEvent }],
+        throwEvents: [throwEvent],
+        throwPenaltyPoints: [0, 40],
+        defenderTrickPoints: 20,
+      },
+    };
+
+    const view = projectRoomState(room, 'throw-p0');
+    expect(view.currentTrick[0].throwEvent?.penaltyPoints).toBe(40);
+    expect(view.throwEvents[0].id).toBe('throw-projected');
+    expect(view.throwPenaltyPoints).toEqual([0, 40]);
+    expect(view.defenderPoints).toBe(60);
   });
 });

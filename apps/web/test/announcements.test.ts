@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Bid, Card, RoomStateView } from '@shengji/shared';
+import type { Bid, Card, RoomStateView, ThrowEventView } from '@shengji/shared';
 import { deriveAnnouncements } from '../src/lib/announcements';
 
 function c(suit: 'S' | 'H' | 'D' | 'C', rank: number, copy: number): Card {
@@ -31,10 +31,14 @@ function mkView(partial: Partial<RoomStateView>): RoomStateView {
     dealerSeat: null,
     currentBid: null,
     bidHistory: [],
+    biddingStage: 'pre-dealer',
     biddingTurn: 0,
     turnSeat: null,
     currentTrick: [],
     lastTrick: [],
+    lastTrickWinnerSeat: null,
+    throwEvents: [],
+    throwPenaltyPoints: [0, 0],
     defenderPoints: 0,
     teamLevels: [2, 2],
     roundResult: null,
@@ -53,6 +57,30 @@ const tripleBid: Bid = {
 };
 const smallJokerSingle: Bid = { seat: 1, kind: 'small-joker-single', suit: null, cards: [joker('small', 0)] };
 const bigJokerSingle: Bid = { seat: 0, kind: 'big-joker-single', suit: null, cards: [joker('big', 0)] };
+const failedThrow: ThrowEventView = {
+  id: 'throw-0-failure-S5',
+  seat: 0,
+  attemptedCards: [c('S', 5, 0), c('S', 5, 1), c('S', 8, 0), c('S', 8, 1)],
+  actualCards: [c('S', 5, 0), c('S', 5, 1)],
+  challengedCards: [c('S', 5, 0), c('S', 5, 1)],
+  success: false,
+  n: 2,
+  penaltyPoints: 40,
+  beneficiaryTeam: 1,
+  reason: 'beatable-pair',
+};
+const successfulThrow: ThrowEventView = {
+  id: 'throw-1-success-S9',
+  seat: 1,
+  attemptedCards: [c('S', 9, 0), c('S', 9, 1), c('S', 12, 0), c('S', 12, 1)],
+  actualCards: [c('S', 9, 0), c('S', 9, 1), c('S', 12, 0), c('S', 12, 1)],
+  challengedCards: [],
+  success: true,
+  n: 2,
+  penaltyPoints: 0,
+  beneficiaryTeam: null,
+  reason: null,
+};
 
 describe('deriveAnnouncements', () => {
   it('no events when prev is null (initial join / reconnect)', () => {
@@ -187,6 +215,32 @@ describe('deriveAnnouncements', () => {
     expect(events).toHaveLength(1);
     expect(events[0].kind).toBe('phase');
     expect(events[0].text).toContain('埋底完成');
+  });
+
+  it('announces failed throw with actual lead and penalty details', () => {
+    const events = deriveAnnouncements(
+      mkView({ phase: 'playing', throwEvents: [] }),
+      mkView({ phase: 'playing', throwEvents: [failedThrow] }),
+    );
+
+    expect(events).toHaveLength(1);
+    expect(events[0].kind).toBe('throw');
+    expect(events[0].text).toContain('你甩牌失败');
+    expect(events[0].text).toContain('本墩实际领出');
+    expect(events[0].text).toContain('20 × 2 = 40');
+    expect(events[0].cards).toEqual(failedThrow.attemptedCards);
+  });
+
+  it('announces successful throw from another player', () => {
+    const events = deriveAnnouncements(
+      mkView({ phase: 'playing', throwEvents: [] }),
+      mkView({ phase: 'playing', throwEvents: [successfulThrow] }),
+    );
+
+    expect(events).toHaveLength(1);
+    expect(events[0].kind).toBe('throw');
+    expect(events[0].text).toContain('机器人2 甩牌成功');
+    expect(events[0].text).toContain('本墩以 2 个对子领出');
   });
 
   it('unrelated phase changes emit nothing', () => {

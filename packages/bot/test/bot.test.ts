@@ -199,4 +199,26 @@ describe('decidePlay', () => {
     });
     expect(ids).toEqual(['S-6-0']); // 不送分
   });
+
+  it('follows a throw-pairs lead with as many required pairs as possible', () => {
+    const trump: TrumpContext = { trumpSuit: 'H', level: 2 };
+    const leadCards = [cardBy('S-9-0'), cardBy('S-9-1'), cardBy('S-12-0'), cardBy('S-12-1')];
+    const leadCombo = {
+      type: 'throw-pairs' as const,
+      cards: leadCards,
+      suit: 'S' as const,
+      strength: 12,
+      components: [detectCombo([cardBy('S-9-0'), cardBy('S-9-1')], trump)!],
+    };
+    const ids = decidePlay({
+      hand: [cardBy('S-3-0'), cardBy('S-3-1'), cardBy('S-4-0'), cardBy('S-7-0'), cardBy('D-9-0')],
+      trump,
+      leadCombo,
+      currentTrick: [{ seat: 0, cards: leadCards, combo: leadCombo }],
+      seat: 1,
+      trickPointsSoFar: 0,
+    });
+
+    expect(ids).toEqual(['S-3-0', 'S-3-1', 'S-4-0', 'S-7-0']);
+  });
 });

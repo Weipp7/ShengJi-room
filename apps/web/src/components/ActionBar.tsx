@@ -103,6 +103,7 @@ export default function ActionBar({
   const isBidTurn = seated && view.biddingTurn === view.yourSeat;
   const isDealer = seated && view.dealerSeat === view.yourSeat;
   const isPlayTurn = seated && view.turnSeat === view.yourSeat;
+  const playButtonText = selectedCount >= 4 ? '出牌 / 甩牌' : '出牌';
 
   return (
     <div className="action-bar">
@@ -137,7 +138,7 @@ export default function ActionBar({
           <span className="muted">{describeWaiting(view, true)}</span>
         ) : isPlayTurn ? (
           <button className="primary" disabled={selectedCount === 0} onClick={onPlay}>
-            出牌
+            {playButtonText}
           </button>
         ) : (
           <span className="muted">{describeWaiting(view, false)}</span>

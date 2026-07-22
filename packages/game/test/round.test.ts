@@ -312,6 +312,94 @@ describe('round state machine', () => {
     expect(s.result?.defenderPoints).toBe(80);
   });
 
+  it('failed throw lead only places the lowest beatable pair and records team penalty', () => {
+    let s = createRound({ plannedDealerSeat: 0, teamLevels: [2, 2], rng: mulberry32(61) });
+    const attempt = [c('S', 5, 0), c('S', 5, 1), c('S', 8, 0), c('S', 8, 1)];
+    s = {
+      ...s,
+      phase: 'playing',
+      biddingStage: null,
+      dealerSeat: 0,
+      trump: { trumpSuit: 'H', level: 2 },
+      hands: [
+        attempt,
+        [c('S', 6, 0), c('S', 6, 1)],
+        [c('S', 3, 0), c('S', 3, 1)],
+        [c('S', 4, 0), c('S', 4, 1)],
+      ],
+      kitty: [],
+      currentTrick: [],
+      lastTrick: [],
+      lastTrickWinnerSeat: null,
+      defenderTrickPoints: 0,
+      throwPenaltyPoints: [0, 0],
+      throwEvents: [],
+      tricksPlayed: 0,
+      turnSeat: 0,
+      result: null,
+    };
+
+    s = expectOk(applyPlay(s, 0, attempt.map((card) => card.id)));
+
+    expect(s.currentTrick).toHaveLength(1);
+    expect(s.currentTrick[0].cards.map((card) => card.id)).toEqual(['S-5-0', 'S-5-1']);
+    expect(s.currentTrick[0].throwEvent).toMatchObject({
+      success: false,
+      penaltyPoints: 40,
+      beneficiaryTeam: 1,
+    });
+    expect(s.throwPenaltyPoints).toEqual([0, 40]);
+    expect(s.throwEvents).toHaveLength(1);
+    expect(s.hands[0].map((card) => card.id)).toEqual(['S-8-0', 'S-8-1']);
+
+    s = expectOk(applyPlay(s, 1, ['S-6-0', 'S-6-1']));
+    s = expectOk(applyPlay(s, 2, ['S-3-0', 'S-3-1']));
+    s = expectOk(applyPlay(s, 3, ['S-4-0', 'S-4-1']));
+    expect(s.lastTrick[0].cards).toHaveLength(2);
+    expect(s.lastTrickWinnerSeat).toBe(1);
+    expect(s.throwPenaltyPoints).toEqual([0, 40]);
+  });
+
+  it('successful throw lead enters the full trick and the leader wins the trick', () => {
+    let s = createRound({ plannedDealerSeat: 0, teamLevels: [2, 2], rng: mulberry32(62) });
+    const attempt = [c('S', 9, 0), c('S', 9, 1), c('S', 12, 0), c('S', 12, 1)];
+    s = {
+      ...s,
+      phase: 'playing',
+      biddingStage: null,
+      dealerSeat: 0,
+      trump: { trumpSuit: 'H', level: 2 },
+      hands: [
+        attempt,
+        [c('S', 3, 0), c('S', 3, 1), c('D', 3, 0), c('D', 4, 0)],
+        [c('S', 4, 0), c('S', 4, 1), c('C', 3, 0), c('C', 4, 0)],
+        [c('S', 7, 0), c('D', 8, 0), c('D', 9, 0), c('C', 9, 0)],
+      ],
+      kitty: [],
+      currentTrick: [],
+      lastTrick: [],
+      lastTrickWinnerSeat: null,
+      defenderTrickPoints: 0,
+      throwPenaltyPoints: [0, 0],
+      throwEvents: [],
+      tricksPlayed: 0,
+      turnSeat: 0,
+      result: null,
+    };
+
+    s = expectOk(applyPlay(s, 0, attempt.map((card) => card.id)));
+    expect(s.currentTrick[0].cards).toHaveLength(4);
+    expect(s.currentTrick[0].combo).toMatchObject({ type: 'throw-pairs', suit: 'S' });
+    expect(s.currentTrick[0].throwEvent).toMatchObject({ success: true, n: 2 });
+    expect(s.throwEvents).toHaveLength(1);
+
+    s = expectOk(applyPlay(s, 1, ['S-3-0', 'S-3-1', 'D-3-0', 'D-4-0']));
+    s = expectOk(applyPlay(s, 2, ['S-4-0', 'S-4-1', 'C-3-0', 'C-4-0']));
+    s = expectOk(applyPlay(s, 3, ['S-7-0', 'D-8-0', 'D-9-0', 'C-9-0']));
+    expect(s.lastTrickWinnerSeat).toBe(0);
+    expect(s.throwPenaltyPoints).toEqual([0, 0]);
+  });
+
   it('reveal makes revealer the dealer and sets trump', () => {
     let s = createRound({ plannedDealerSeat: 0, teamLevels: [2, 2], rng: mulberry32(11) });
     // 沿叫主轮次找到第一个持有级牌的座位并亮主

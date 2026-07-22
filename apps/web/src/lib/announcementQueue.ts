@@ -21,6 +21,14 @@ export function mergeAnnouncementQueue(
     };
   }
 
+  const hasThrow = fresh.some((a) => a.kind === 'throw');
+  if (hasThrow) {
+    return {
+      queue: [...queue.filter((a) => a.kind === 'phase'), ...fresh.filter((a) => a.kind !== 'bid')],
+      clearCurrent: current !== null && current.kind !== 'phase',
+    };
+  }
+
   const hasCounter = fresh.some((a) => a.kind === 'counter');
   if (hasCounter) {
     return {

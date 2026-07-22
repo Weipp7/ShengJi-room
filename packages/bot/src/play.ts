@@ -112,6 +112,18 @@ function decideFollow(view: BotPlayView): string[] {
     } else {
       play = sortByOrder(suitCards).slice(0, 2);
     }
+  } else if (lead.type === 'throw-pairs') {
+    const pairLen = n / 2;
+    const pairs = findPairs(suitCards, trump);
+    const need = Math.min(pairs.length, pairLen);
+    const used = new Set<string>();
+    play = [];
+    for (const p of pairs.slice(0, need)) {
+      play.push(...p);
+      for (const c of p) used.add(c.id);
+    }
+    const rest = sortByOrder(suitCards.filter((c) => !used.has(c.id)));
+    play.push(...rest.slice(0, n - play.length));
   } else {
     // tractor
     const pairLen = n / 2;

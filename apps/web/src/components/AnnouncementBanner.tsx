@@ -13,6 +13,7 @@ const SHOW_MS: Record<Announcement['kind'], number> = {
   bid: 2800,
   counter: 3500,
   phase: 2400,
+  throw: 3600,
 };
 
 // 牌桌顶部公告条：一次一条先进先出，展示操作者/类型/牌面

@@ -35,6 +35,8 @@ function mkView(partial: Partial<RoomStateView>): RoomStateView {
     currentTrick: [],
     lastTrick: [],
     lastTrickWinnerSeat: null,
+    throwEvents: [],
+    throwPenaltyPoints: [0, 0],
     defenderPoints: 0,
     teamLevels: [2, 2],
     roundResult: null,
@@ -62,5 +64,23 @@ describe('ActionBar', () => {
     expect(html).toContain('王');
     expect(html).toContain('大单');
     expect(html).toContain('确认埋牌');
+  });
+
+  it('labels large lead selections as possible throw plays', () => {
+    const html = renderToStaticMarkup(
+      React.createElement(ActionBar, {
+        view: mkView({ phase: 'playing', turnSeat: 0 }),
+        selectedCount: 4,
+        holdActive: false,
+        onBid: () => {},
+        onPass: () => {},
+        onBury: () => {},
+        onPlay: () => {},
+        onNextRound: () => {},
+        onClear: () => {},
+      }),
+    );
+
+    expect(html).toContain('甩牌');
   });
 });

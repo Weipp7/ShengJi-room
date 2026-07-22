@@ -33,6 +33,8 @@ function mkView(partial: Partial<RoomStateView>): RoomStateView {
     currentTrick: [],
     lastTrick: [],
     lastTrickWinnerSeat: null,
+    throwEvents: [],
+    throwPenaltyPoints: [0, 0],
     defenderPoints: 0,
     teamLevels: [2, 2],
     roundResult: null,

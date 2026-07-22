@@ -16,7 +16,7 @@ import type {
   SeatTakePayload,
   TrickPlayPayload,
 } from '@shengji/shared';
-import { C2S, S2C } from '@shengji/shared';
+import { C2S, S2C, teamOfSeat } from '@shengji/shared';
 import { sortHand } from '@shengji/game';
 import { loadConfig, type ServerConfig } from './config';
 import { RoomManager, type Room } from './rooms';
@@ -28,6 +28,16 @@ export function projectRoomState(room: Room, playerId: string): RoomStateView {
   const round = room.round;
   const yourSeat = room.seats.findIndex((s) => s.player?.playerId === playerId);
   const hostSeat = room.seats.findIndex((s) => s.player?.playerId === room.hostPlayerId);
+  const effectiveDefenderPoints =
+    round == null
+      ? 0
+      : Math.max(
+          0,
+          round.defenderTrickPoints +
+            round.throwPenaltyPoints[(1 - teamOfSeat(round.dealerSeat)) as 0 | 1] -
+            round.throwPenaltyPoints[teamOfSeat(round.dealerSeat)],
+        );
+  const defenderPoints = round?.phase === 'scoring' && round.result ? round.result.defenderPoints : effectiveDefenderPoints;
   return {
     roomCode: room.code,
     phase: room.phase,
@@ -49,10 +59,12 @@ export function projectRoomState(room: Room, playerId: string): RoomStateView {
     biddingStage: round?.biddingStage ?? null,
     biddingTurn: round && round.phase === 'bidding' ? round.biddingTurn : null,
     turnSeat: round && round.phase === 'playing' ? round.turnSeat : null,
-    currentTrick: round?.currentTrick.map((p) => ({ seat: p.seat, cards: p.cards })) ?? [],
-    lastTrick: round?.lastTrick.map((p) => ({ seat: p.seat, cards: p.cards })) ?? [],
+    currentTrick: round?.currentTrick.map((p) => ({ seat: p.seat, cards: p.cards, throwEvent: p.throwEvent })) ?? [],
+    lastTrick: round?.lastTrick.map((p) => ({ seat: p.seat, cards: p.cards, throwEvent: p.throwEvent })) ?? [],
     lastTrickWinnerSeat: round?.lastTrickWinnerSeat ?? null,
-    defenderPoints: round?.defenderTrickPoints ?? 0,
+    throwEvents: round?.throwEvents ?? [],
+    throwPenaltyPoints: round?.throwPenaltyPoints ?? [0, 0],
+    defenderPoints,
     teamLevels: room.teamLevels,
     roundResult: round?.phase === 'scoring' ? round.result : null,
   };
