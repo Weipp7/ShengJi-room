@@ -1,11 +1,18 @@
 import type { Bid, Card, RoomStateView } from '@shengji/shared';
 import { rankText, SUIT_SYMBOL } from './format';
 
+export type ContractFact = {
+  label: string;
+  value: string;
+  tone: 'trump' | 'levels' | 'dealer' | 'score' | 'stage';
+};
+
 export type ContractSummary = {
   mode: 'pending' | 'bid' | 'fallback';
   title: string;
   detail: string;
   cards: Card[];
+  facts: ContractFact[];
 };
 
 function seatName(view: RoomStateView, seat: number | null): string {
@@ -17,6 +24,34 @@ function seatName(view: RoomStateView, seat: number | null): string {
 function trumpName(view: RoomStateView): string {
   const suit = view.trump?.trumpSuit ?? null;
   return suit ? `主 ${SUIT_SYMBOL[suit]}` : '本局无主';
+}
+
+function trumpFactValue(view: RoomStateView, level: number): string {
+  if (!view.trump) return `待定 ${rankText(level as Parameters<typeof rankText>[0])}`;
+  const suit = view.trump.trumpSuit ? SUIT_SYMBOL[view.trump.trumpSuit] : '无主';
+  return `${suit} ${rankText(level as Parameters<typeof rankText>[0])}`;
+}
+
+function teamLevelsText(view: RoomStateView): string {
+  return `蓝队 ${rankText(view.teamLevels[0])} / 红队 ${rankText(view.teamLevels[1])}`;
+}
+
+function contractFacts(view: RoomStateView, stageLabel: string | null): ContractFact[] {
+  const level = view.trump?.level ?? view.teamLevels[0];
+  const facts: ContractFact[] = [
+    { label: '主', value: trumpFactValue(view, level), tone: 'trump' },
+    { label: '队伍级牌', value: teamLevelsText(view), tone: 'levels' },
+  ];
+  if (view.dealerSeat !== null) {
+    facts.push({ label: '庄', value: seatName(view, view.dealerSeat), tone: 'dealer' });
+  }
+  if (view.phase === 'playing' || view.phase === 'scoring') {
+    facts.push({ label: '闲家', value: `${view.defenderPoints}/80`, tone: 'score' });
+  }
+  if (stageLabel !== null) {
+    facts.push({ label: '反牌窗口', value: stageLabel, tone: 'stage' });
+  }
+  return facts;
 }
 
 export function bidLabel(bid: Bid, level: number): string {
@@ -54,17 +89,19 @@ export function describeContract(view: RoomStateView): ContractSummary {
       previousBid === null
         ? ''
         : `（压过 ${seatName(view, previousBid.seat)} ${bidLabel(previousBid, level)}）`;
-    const stageText =
+    const stageLabel =
       view.phase === 'bidding' && view.biddingStage === 'pre-dealer'
-        ? '，庄前反牌中'
+        ? '庄前反牌中'
         : view.phase === 'burying' && view.biddingStage === 'post-dealer'
-          ? '，庄后反牌中'
-          : '';
+          ? '庄后反牌中'
+          : null;
+    const stageText = stageLabel === null ? '' : `，${stageLabel}`;
     return {
       mode: 'bid',
       title,
       detail: `${bidder} ${action} ${bid}${previousText}，${trumpName(view)}，${levelText}，庄家 ${dealer}${stageText}`,
       cards: view.currentBid.cards,
+      facts: contractFacts(view, stageLabel),
     };
   }
   if (view.phase !== 'bidding' && view.dealerSeat !== null) {
@@ -73,6 +110,7 @@ export function describeContract(view: RoomStateView): ContractSummary {
       title: '无人亮主',
       detail: `无人亮主，${trumpName(view)}，${levelText}，庄家 ${seatName(view, view.dealerSeat)}`,
       cards: [],
+      facts: contractFacts(view, null),
     };
   }
   return {
@@ -80,5 +118,6 @@ export function describeContract(view: RoomStateView): ContractSummary {
     title: '还没有人亮主',
     detail: `等待亮主或反主，${levelText}`,
     cards: [],
+    facts: contractFacts(view, null),
   };
 }

@@ -48,6 +48,9 @@ test('two browser contexts observe a deterministic reveal and counter flow', asy
   await expect(guest.locator('body')).toContainText('反主');
   await expect(host.locator('body')).toContainText('小王单张');
   await expect(guest.locator('body')).toContainText('小王单张');
+  await expect(host.locator('.contract-facts')).toContainText('主');
+  await expect(host.locator('.contract-facts')).toContainText('队伍级牌');
+  await expect(host.locator('.contract-facts')).toContainText('庄');
 
   await guest.reload();
   await expect(guest.locator('body')).toContainText(roomCode!);
@@ -65,9 +68,15 @@ test('two browser contexts observe a deterministic reveal and counter flow', asy
   await compact.getByRole('button', { name: '加入' }).last().click();
   await expect(compact.locator('body')).toContainText('小王单张');
   await expect(compact.locator('body')).toContainText('反主');
+  await expect(compact.locator('.contract-facts')).toContainText('主');
+  await expect(compact.locator('.contract-facts')).toContainText('无主');
+  await expect(compact.locator('.contract-facts')).toContainText('队伍级牌');
+  await expect(compact.locator('.contract-facts')).toContainText('庄');
+  await expect(compact.locator('.contract-cards .card-face')).toHaveCount(1);
   const overflow = await compact.evaluate(() => {
     const actionBar = document.querySelector('.action-bar');
     const statusBar = document.querySelector('.status-bar');
+    const contractSummary = document.querySelector('.contract-summary');
     return {
       viewportWidth: window.innerWidth,
       documentScrollWidth: document.documentElement.scrollWidth,
@@ -76,12 +85,15 @@ test('two browser contexts observe a deterministic reveal and counter flow', asy
       actionBarScrollWidth: actionBar?.scrollWidth ?? 0,
       statusBarClientWidth: statusBar?.clientWidth ?? 0,
       statusBarScrollWidth: statusBar?.scrollWidth ?? 0,
+      contractClientWidth: contractSummary?.clientWidth ?? 0,
+      contractScrollWidth: contractSummary?.scrollWidth ?? 0,
     };
   });
   expect(overflow.documentScrollWidth).toBeLessThanOrEqual(overflow.viewportWidth);
   expect(overflow.bodyScrollWidth).toBeLessThanOrEqual(overflow.viewportWidth);
   expect(overflow.actionBarScrollWidth).toBeLessThanOrEqual(overflow.actionBarClientWidth);
   expect(overflow.statusBarScrollWidth).toBeLessThanOrEqual(overflow.statusBarClientWidth);
+  expect(overflow.contractScrollWidth).toBeLessThanOrEqual(overflow.contractClientWidth);
   const overlappingBadges = await compact.evaluate(() => {
     const badges = [...document.querySelectorAll('.player-badge')].map((el) => {
       const rect = el.getBoundingClientRect();

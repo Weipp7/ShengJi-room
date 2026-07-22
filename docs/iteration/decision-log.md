@@ -259,3 +259,13 @@
 **影响：** `GameTable.tsx` 只在 `isQuickStartRoom(view.roomCode)` 且 `phase === scoring` 时启动 10 秒倒计时；`查看牌桌`、手动 `下一局` 和 `离开本局` 会清理计时器或 session，普通创建房间不自动续局。
 
 **回滚：** 恢复 `Room.tsx` 开局后调用 `clearQuickStartSession()`，删除 `clearQuickStartPending` / `isQuickStartRoom`、`GameTable.tsx` 自动继续 effect、`ResultModal.tsx` 倒计时展示和相关测试即可回到只自动开局、不自动续局的行为。
+
+## 2026-07-22：ITER-018 状态栏与契约摘要分工
+
+**决策：** `StatusBar` 只展示房间码、阶段、当前操作方和离开入口；主花色、级牌、庄家、闲家分和反牌窗口统一由 `ContractSummary` 的结构化 fact strip 展示。
+
+**原因：** 外站快速开始样本把玩家高频扫视信息压缩在一个牌桌信息面板内。旧实现把同一组主/级/庄/分信息同时放在 `StatusBar` 和 `ContractSummary`，玩家需要在两条顶部栏之间重复扫描，且响应式布局更容易拥挤。
+
+**影响：** `describeContract` 增加 `facts` 输出，组件和 E2E 可直接验证 `主`、`队伍级牌`、`庄`、`闲家`、`反牌窗口` 是否可见；紧凑横屏隐藏长句 detail，保留 facts 和亮出的牌。
+
+**回滚：** 恢复 `StatusBar.tsx` 中主/级/庄/闲家分展示，移除 `ContractSummary.tsx` 的 `contract-facts` 渲染、`contract.ts` 的 `facts` 字段和对应测试/CSS。

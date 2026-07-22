@@ -434,3 +434,21 @@
   - 已修复：0 级场景改为 `换庄，不升级`。
 - Minor：`ITER-002` 截图因重跑 E2E 被刷新。
   - 处理：保留本次测试成功产物，最终提交前统一确认纳入或剔除；不影响运行时逻辑。
+
+### 第四小闭环复审：牌桌顶部信息密度
+
+- 产品经理：玩家在出牌时不应同时读两套主/级/庄/分信息。已采纳为“状态栏只管房间级状态，契约摘要管本局事实”。
+- 真实玩家体验官：新 facts strip 能稳定扫到 `主`、`队伍级牌`、`庄`、`闲家`；最新亮牌/反主仍保留在标题和 detail 中。
+- 前端交互评审：紧凑横屏隐藏长句 detail，保留 facts 和亮出的牌；E2E 增加 `.contract-summary` scrollWidth 断言。
+- QA 测试工程师：新增 `contractSummary.test.tsx` 和 `statusBar.test.tsx`，扩展 `contract.test.ts`；E2E 覆盖反主后 facts 可见和紧凑横屏无溢出。
+- 对抗评审者：风险是状态栏收敛后信息丢失。已通过 `ContractSummary` facts 测试覆盖 `主`、`队伍级牌`、`庄`、`闲家` 和反牌窗口，避免只从状态栏删除字段。
+- Release Reviewer：回滚重点是 `contract.ts` facts 字段、`ContractSummary.tsx` fact strip、`StatusBar.tsx` 收敛和 CSS 响应式规则。
+
+### 第四小闭环代码审查处理记录
+
+- Important：紧凑横屏 E2E 只验证了不溢出，没有直接验证 `.contract-facts` 在紧凑视口仍展示关键事实。
+  - 已修复：`bidding-flow.e2e.ts` 在 `844x390` 视口下直接断言 `.contract-facts` 可见 `主`、`无主`、`队伍级牌`、`庄`，并断言 `.contract-cards` 仍有亮出的牌。
+- Minor：`contract-facts` 的 `aria-label` 没覆盖队伍级牌和反牌窗口。
+  - 已修复：aria label 改为 `当前主牌、级牌、庄家、分数与反牌窗口`。
+- Recommendation：补无主 facts 单测。
+  - 已修复：`contract.test.ts` 的无人亮主/无主 fallback 场景断言 `主 无主 2` 和 `庄 你`。

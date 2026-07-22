@@ -10,7 +10,7 @@ P0。
 
 ## 当前状态
 
-In Progress。第一小闭环“快速机器人局一键自动开局”、第二小闭环“结算结果原因化文案”、第三小闭环“快速机器人局结算倒计时自动续局”已完成；牌桌顶部信息压缩、6 人模式和机器人策略样本池仍在后续小闭环。
+In Progress。第一小闭环“快速机器人局一键自动开局”、第二小闭环“结算结果原因化文案”、第三小闭环“快速机器人局结算倒计时自动续局”、第四小闭环“牌桌顶部信息密度收敛”已完成；6 人模式和机器人策略样本池仍在后续小闭环。
 
 ## 背景
 
@@ -69,6 +69,8 @@ In Progress。第一小闭环“快速机器人局一键自动开局”、第二
 
 本项目 `StatusBar.tsx` 和 `ContractSummary.tsx` 已展示房间、阶段、级牌、主、庄、闲家分、亮牌/反主历史。外站把主花色、级牌、最新亮牌、闲家分和队伍级牌压缩到左上信息面板，常驻且扫视成本低。
 
+当前已改为：`StatusBar` 只保留房间、阶段、当前操作方和离开入口；`ContractSummary` 统一展示当前亮牌/反主详情，并用结构化 facts strip 常驻展示 `主`、`队伍级牌`、`庄`、`闲家` 和反牌窗口，避免玩家在两条顶部栏之间反复扫描重复字段。
+
 ### P2：机器人策略只可从行为推断
 
 外站公开前端没有暴露服务端策略实现。当前可观察到：
@@ -92,10 +94,9 @@ In Progress。第一小闭环“快速机器人局一键自动开局”、第二
 
 ## 后续小闭环候选
 
-1. 顶部信息压缩：在不破坏现有 ContractSummary 的前提下，让主花色、级牌、最新亮牌/反主、闲家分和队伍级牌更接近外站的低扫视成本。
-2. E2E 扩展：把下一局自动续局后的二局起始状态纳入 `pnpm test:e2e`。
-3. 机器人策略样本池：用固定牌序采样并记录 bot 亮主、埋底、领牌、跟牌原因，避免只靠随机试玩评价。
-4. 6 人模式调研与范围决策：外站支持 6 人快速开始，本项目当前 4 人状态机不应在未评估规则影响时直接扩展。
+1. E2E 扩展：把下一局自动续局后的二局起始状态纳入 `pnpm test:e2e`。
+2. 机器人策略样本池：用固定牌序采样并记录 bot 亮主、埋底、领牌、跟牌原因，避免只靠随机试玩评价。
+3. 6 人模式调研与范围决策：外站支持 6 人快速开始，本项目当前 4 人状态机不应在未评估规则影响时直接扩展。
 
 ## 涉及模块 / 文件
 
@@ -204,16 +205,31 @@ In Progress。第一小闭环“快速机器人局一键自动开局”、第二
 - 截图：`docs/iteration/artifacts/ITER-018/screenshots/quick-start-explanatory-settlement.png`。
 - 本地服务 smoke：`http://localhost:5173/` 点击 `开一桌` 后进入 `叫主`，没有停在 `开始游戏`；截图 `docs/iteration/artifacts/ITER-018/screenshots/local-latest-quick-start.png`。
 
+### 第四小闭环：牌桌顶部信息密度收敛
+
+- 红测命令：`pnpm test apps/web/test/contract.test.ts`
+- 红测结果：失败，`describeContract` 没有结构化 `facts`，无法直接测试 `主`、`队伍级牌`、`庄`、`闲家` 等高频信息。
+- 红测命令：`pnpm test apps/web/test/contractSummary.test.tsx`
+- 红测结果：失败，`ContractSummary` HTML 不包含 `contract-facts`。
+- 红测命令：`pnpm test apps/web/test/statusBar.test.tsx`
+- 红测结果：失败，`StatusBar` 仍重复展示 `级牌`、`主`、`庄`、`闲家`。
+- 修复：`apps/web/src/lib/contract.ts` 增加 `ContractFact` 和 facts 生成；`ContractSummary.tsx` 渲染紧凑 fact strip；`StatusBar.tsx` 收敛为房间/阶段/轮到/离开；CSS 增加响应式换行和紧凑横屏隐藏长 detail。
+- 复测命令：`pnpm test apps/web/test/contract.test.ts apps/web/test/contractSummary.test.tsx apps/web/test/statusBar.test.tsx`
+- 复测结果：通过，3 个测试文件，11 个测试。
+- E2E 命令：`pnpm test:e2e apps/web/e2e/bidding-flow.e2e.ts`
+- E2E 结果：通过，1 个 chromium E2E；断言反主后 `.contract-facts` 可见 `主`、`队伍级牌`、`庄`，紧凑横屏 `.contract-summary` 无横向溢出。
+- 本地服务 smoke：`http://localhost:5173/` 点击 `开一桌` 后进入 `叫主`；`status-bar` 为 `房间 ... 叫主 轮到 你 离开`，`contract-facts` 为 `主 ... 队伍级牌 ... 庄 ...`。
+- 截图：`docs/iteration/artifacts/ITER-018/screenshots/contract-facts-quick-start.png`。
+
 ### 当前全量验证
 
-- `pnpm test`：通过，30 个测试文件，229 个测试。
+- `pnpm test`：通过，32 个测试文件，232 个测试。
 - `pnpm typecheck`：通过。
 - `pnpm build`：通过。
-- `pnpm test:e2e`：通过，4 个 chromium E2E。
+- `pnpm test:e2e`：通过，4 个 chromium E2E，49.2 秒。
 - `git diff --check`：通过。
 
 ### 后续待推进
 
-- 更密集的牌桌局面板，降低 `StatusBar` 与 `ContractSummary` 的重复扫视成本。
 - 自动继续后第二局起始状态 E2E。
 - 机器人策略样本池：继续采集外站可观察决策，再转成固定手牌测试。

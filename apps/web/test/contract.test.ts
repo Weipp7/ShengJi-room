@@ -82,6 +82,13 @@ describe('describeContract', () => {
     expect(summary.detail).toContain('级牌 2');
     expect(summary.detail).toContain('庄家 机器人3');
     expect(summary.cards).toEqual(pairBid.cards);
+    expect(summary.facts).toEqual(
+      expect.arrayContaining([
+        { label: '主', value: '♥ 2', tone: 'trump' },
+        { label: '队伍级牌', value: '蓝队 2 / 红队 2', tone: 'levels' },
+        { label: '庄', value: '机器人3', tone: 'dealer' },
+      ]),
+    );
   });
 
   it('marks the pre-dealer counter window while bidding continues', () => {
@@ -168,6 +175,9 @@ describe('describeContract', () => {
     );
     expect(summary.title).toContain('庄后反牌');
     expect(summary.detail).toContain('庄后反牌中');
+    expect(summary.facts).toEqual(
+      expect.arrayContaining([{ label: '反牌窗口', value: '庄后反牌中', tone: 'stage' }]),
+    );
   });
 
   it('describes no-bid fallback dealer and no-trump contract', () => {
@@ -184,5 +194,33 @@ describe('describeContract', () => {
     expect(summary.detail).toContain('本局无主');
     expect(summary.detail).toContain('庄家 你');
     expect(summary.cards).toEqual([]);
+    expect(summary.facts).toEqual(
+      expect.arrayContaining([
+        { label: '主', value: '无主 2', tone: 'trump' },
+        { label: '庄', value: '你', tone: 'dealer' },
+      ]),
+    );
+  });
+
+  it('surfaces the high-frequency table facts during play', () => {
+    const summary = describeContract(
+      mkView({
+        phase: 'playing',
+        currentBid: pairBid,
+        bidHistory: [pairBid],
+        trump: { trumpSuit: 'H', level: 2 },
+        dealerSeat: 2,
+        turnSeat: 1,
+        defenderPoints: 45,
+        teamLevels: [2, 3],
+      }),
+    );
+
+    expect(summary.facts).toEqual([
+      { label: '主', value: '♥ 2', tone: 'trump' },
+      { label: '队伍级牌', value: '蓝队 2 / 红队 3', tone: 'levels' },
+      { label: '庄', value: '机器人3', tone: 'dealer' },
+      { label: '闲家', value: '45/80', tone: 'score' },
+    ]);
   });
 });

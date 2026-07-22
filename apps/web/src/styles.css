@@ -484,18 +484,20 @@ input:focus {
   padding: 6px 14px;
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 14px;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
   background: rgba(0, 0, 0, 0.24);
   border-bottom: 1px solid var(--line);
   font-size: 13px;
 }
 
 .contract-copy {
+  flex: 1 1 260px;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 6px 10px;
   min-width: 0;
 }
@@ -509,7 +511,55 @@ input:focus {
 .contract-detail {
   color: #cfe5d9;
   overflow-wrap: anywhere;
-  text-align: center;
+  text-align: left;
+}
+
+.contract-facts {
+  flex: 2 1 420px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 5px;
+  margin: 0;
+  min-width: 0;
+}
+
+.contract-fact {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  min-height: 26px;
+  padding: 3px 7px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  white-space: nowrap;
+}
+
+.contract-fact dt {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.contract-fact dd {
+  margin: 0;
+  color: var(--text);
+  font-weight: 700;
+}
+
+.fact-trump dd,
+.fact-score dd {
+  color: var(--gold);
+}
+
+.fact-dealer dd {
+  color: #7fe08a;
+}
+
+.fact-stage dd {
+  color: #dcecff;
 }
 
 .contract-cards {
@@ -1210,6 +1260,29 @@ input:focus {
     padding: 4px 8px;
     gap: 8px;
     font-size: 11px;
+  }
+
+  .contract-copy {
+    flex-basis: 160px;
+  }
+
+  .contract-detail {
+    display: none;
+  }
+
+  .contract-facts {
+    flex-basis: 360px;
+    justify-content: flex-start;
+    gap: 4px;
+  }
+
+  .contract-fact {
+    min-height: 22px;
+    padding: 2px 5px;
+  }
+
+  .contract-fact dt {
+    font-size: 10px;
   }
 
   .contract-summary .card-face.small {

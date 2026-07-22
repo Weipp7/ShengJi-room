@@ -471,17 +471,27 @@
 
 ### ITER-018 当前全量回归
 
+- 第四小闭环红测命令：`pnpm test apps/web/test/contract.test.ts apps/web/test/contractSummary.test.tsx`
+- 红测结果：失败，`describeContract` 不输出结构化 `facts`，`ContractSummary` 不渲染 `contract-facts`。
+- 第四小闭环红测命令：`pnpm test apps/web/test/statusBar.test.tsx`
+- 红测结果：失败，`StatusBar` 仍重复展示 `级牌`、`主`、`庄`、`闲家`。
+- 第四小闭环复测命令：`pnpm test apps/web/test/contract.test.ts apps/web/test/contractSummary.test.tsx apps/web/test/statusBar.test.tsx`
+- 结果：通过，3 个测试文件，11 个测试。
+- 第四小闭环 E2E 命令：`pnpm test:e2e apps/web/e2e/bidding-flow.e2e.ts`
+- 结果：通过，1 个 chromium E2E；覆盖普通视口 contract fact strip 可见性，紧凑横屏 `.contract-facts` 仍显示 `主`、`无主`、`队伍级牌`、`庄`，亮出的牌仍可见，且 contract summary 无横向溢出。
+- 本地服务 smoke：`http://localhost:5173/` 快速开局后，`status-bar` 显示 `房间 ... 叫主 轮到 你 离开`，`contract-facts` 显示 `主 ... 队伍级牌 ... 庄 ...`。
+- 截图：`docs/iteration/artifacts/ITER-018/screenshots/contract-facts-quick-start.png`。
 - 代码审查修复命令：`pnpm test apps/web/test/resultModal.test.tsx apps/web/test/quickStart.test.ts`
 - 结果：通过，2 个测试文件，9 个测试；覆盖正数扣底不重复计入基础分、快速 session helper 生命周期。
 - 代码审查修复命令：`pnpm test:e2e apps/web/e2e/quick-start.e2e.ts`
 - 结果：通过，3 个 chromium E2E，35.2 秒；普通建房测试预置残留 `shengji:quickStartPending`，仍等待显式开始。
 - 命令：`pnpm test`
-- 结果：通过，30 个测试文件，229 个测试。
+- 结果：通过，32 个测试文件，232 个测试。
 - 命令：`pnpm typecheck`
 - 结果：通过，`pnpm -r exec tsc --noEmit` 无错误。
 - 命令：`pnpm build`
 - 结果：通过，shared/game/bot/server/web 均构建成功。
 - 命令：`pnpm test:e2e`
-- 结果：通过，4 个 chromium E2E，50.1 秒；覆盖两客户端亮牌/反主、快速机器人局自动开局、完整局到解释性结算、普通房间不自动开始。
+- 结果：通过，4 个 chromium E2E，49.4 秒；覆盖两客户端亮牌/反主、快速机器人局自动开局、完整局到解释性结算、普通房间不自动开始。
 - 命令：`git diff --check`
 - 结果：通过，无 whitespace error。
