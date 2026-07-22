@@ -1,5 +1,30 @@
 # Iteration Review Notes
 
+## 2026-07-22：ITER-017 缺陷池与 BUG-017-001 评审
+
+### QA / 回归评审
+
+- P0：甩牌失败判定把队友也当成“可压住的人”。
+  - 已记录为 `BUG-017-002`，排在 `BUG-017-001` 后继续处理。
+- P1：快速重复操作缺少 pending 锁，成功操作后的第二次请求会显示误导性 `wrong-turn/wrong-phase`。
+  - 已记录为 `BUG-017-003`，对应 `ITER-001`。
+- P2：跟牌阶段选择 4 张也显示“出牌 / 甩牌”；收墩驻留期间仍可选择手牌。
+  - 已记录为 `BUG-017-006` 和 `BUG-017-007`。
+
+### 对抗工程评审
+
+- Critical：重连/刷新后，如果 `lastTrick` 已存在且 `currentTrick` 已经开始，旧逻辑会在初始挂载时回放上一墩并禁用出牌。
+  - 已修复：`nextSettledReview` 只有在当前墩为空时才启动驻留；当前墩变化进入 `settledReviewStateKey`，会立即清理旧驻留。
+- Important：赢家显示仍有 `view.lastTrickWinnerSeat ?? view.turnSeat` 的不可信 fallback。
+  - 已修复：只使用 `lastTrickWinnerSeat`；字段缺失时显示“本墩结束”。
+- Important：失败甩牌后残留选择、服务端不阻止真人抢跑。
+  - 已记录为 `BUG-017-004` 和 `BUG-017-005`，需要单独产品/协议决策。
+
+### Release Reviewer
+
+- 回滚建议：`BUG-017-001` 可按单提交回滚；手工回滚重点是 `apps/web/src/lib/settledReview.ts`、`GameTable.tsx` 和 `apps/web/test/settledReview.test.ts`。
+- 剩余风险：缺少 `roundId/trickIndex/stateVersion`，无法完美区分“刚结墩”和“重连快照”；当前先用 `currentTrick.length` 阻断最伤体验的错误回放。
+
 ## 2026-07-22：ITER-015 出牌提示按钮与可解释推荐评审
 
 ### 产品经理 / 真实玩家体验官

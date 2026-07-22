@@ -41,7 +41,7 @@
 | ITER-014 | 庄前反牌与庄后反牌阶段 | P0 | Done | ITER-013 | `014-pre-post-dealer-counter-phases.md` | 用户新增目标；`packages/game/src/round.ts`; bidding -> bury -> play 状态机 |
 | ITER-015 | 出牌提示按钮与可解释推荐 | P1 | Done | ITER-012 | `015-play-hint-button.md` | 用户新增目标；`ActionBar.tsx`; `HandFan.tsx`; bot play evaluator |
 | ITER-016 | 甩牌功能与失败惩罚结算 | P0 | Done | ITER-005, ITER-013 | `016-throw-play-and-penalty.md` | 用户新增目标；combo/follow/trick/scoring 规则链路 |
-| ITER-017 | 扩展功能缺陷池与回归修复流程 | P0 | Ready | ITER-000 | `017-bugfix-regression-pool.md` | 用户新增目标“多项 bug 修复”；当前体验 review 与测试缺口 |
+| ITER-017 | 扩展功能缺陷池与回归修复流程 | P0 | In Progress | ITER-000 | `017-bugfix-regression-pool.md` | 用户新增目标“多项 bug 修复”；当前体验 review 与测试缺口 |
 
 ## 阶段进度
 
@@ -63,7 +63,7 @@
 
 当前完成项：`ITER-015 出牌提示按钮与可解释推荐`。
 
-下一建议推进项：`ITER-017 扩展功能缺陷池与回归修复流程`。原因是亮牌、反主、甩牌、机器人策略和出牌提示已形成连续功能链路，下一步应集中整理试玩与回归中发现的缺陷，避免继续叠功能时扩大不稳定面。
+当前推进项：`ITER-017 扩展功能缺陷池与回归修复流程`。当前小闭环为 `BUG-017-001`：修复重连/刷新后上一墩回放覆盖当前墩、赢家显示不可信的回归风险。
 
 ## 已知延期但必须追踪
 

@@ -14,6 +14,7 @@ import ChatPanel from '../components/ChatPanel';
 import AnnouncementBanner from '../components/AnnouncementBanner';
 import ContractSummary from '../components/ContractSummary';
 import { createPlayHint, playHintContextKey, type PlayHint } from '../lib/playHint';
+import { nextSettledReview, settledReviewStateKey } from '../lib/settledReview';
 
 // 与 SeatRing 一致的旋转映射
 const POSITIONS = ['bottom', 'right', 'top', 'left'] as const;
@@ -80,19 +81,18 @@ export default function GameTable() {
   }, [currentPlayHintKey]);
 
   // lastTrick 变化 = 刚结了一墩；lastTrickWinnerSeat 兜住 scoring 阶段 turnSeat=null 的最终一墩
-  const lastTrickKey = `${view.lastTrick.map((p) => p.cards.map((c) => c.id).join(',')).join('|')}:${
-    view.lastTrickWinnerSeat ?? ''
-  }`;
+  const settledReviewKey = settledReviewStateKey(view);
   useEffect(() => {
-    if (view.lastTrick.length < 4) {
+    const review = nextSettledReview(view);
+    if (review === null) {
       setSettled(null);
       return;
     }
-    setSettled({ plays: view.lastTrick, winnerSeat: view.lastTrickWinnerSeat ?? view.turnSeat });
+    setSettled(review);
     window.clearTimeout(holdTimer.current);
     holdTimer.current = window.setTimeout(() => setSettled(null), 3000);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lastTrickKey]);
+  }, [settledReviewKey]);
   useEffect(() => () => window.clearTimeout(holdTimer.current), []);
   useEffect(() => {
     if (settled !== null) setPlayHint(null);

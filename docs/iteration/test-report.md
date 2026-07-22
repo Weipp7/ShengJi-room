@@ -143,3 +143,36 @@
 - 截图：
   - `docs/iteration/015-browser-play-hint.png`
   - `docs/iteration/015-browser-play-hint-mobile.png`
+
+## ITER-017 扩展功能缺陷池与回归修复流程
+
+### BUG-017-001 上一墩回放覆盖当前墩
+
+#### 红测记录
+
+- 命令：`pnpm test apps/web/test/settledReview.test.ts apps/web/test/trickArea.test.tsx`
+- 结果：失败，`settledReview` 模块不存在。
+- 结论：上一墩驻留判定散落在 `GameTable.tsx` 内，缺少可测试入口来复现重连/刷新后旧墩覆盖当前墩的问题。
+
+- 命令：`pnpm test apps/web/test/settledReview.test.ts`
+- 结果：失败，`settledReviewStateKey is not a function`。
+- 结论：仅使用 `lastTrick` key 不足以在当前墩开始时清理旧驻留，需要把当前墩纳入 effect 依赖 key。
+
+#### 修复后验证
+
+- 命令：`pnpm test apps/web/test/settledReview.test.ts apps/web/test/trickArea.test.tsx`
+- 结果：通过，2 个测试文件，8 个测试。
+- 覆盖：当前墩已开始时不回放上一墩、缺失上一墩赢家时不使用 `turnSeat` 冒充赢家、当前墩变化会触发驻留状态清理。
+
+- 命令：`pnpm test apps/web/test/playHint.test.ts apps/web/test/actionBar.test.tsx apps/web/test/handFan.test.tsx`
+- 结果：通过，3 个测试文件，8 个测试。
+- 覆盖：修复未破坏出牌提示按钮和高亮状态。
+
+- 命令：`pnpm test`
+- 结果：通过，26 个测试文件，208 个测试。
+
+- 命令：`pnpm typecheck`
+- 结果：通过，`pnpm -r exec tsc --noEmit` 无错误。
+
+- 命令：`pnpm build`
+- 结果：通过，shared/game/bot/server/web 均构建成功。

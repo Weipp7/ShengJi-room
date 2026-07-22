@@ -159,3 +159,13 @@
 **影响：** `GameTable` 点击提示、手动出牌、移动端布局的证据写入 `015-play-hint-button.md` 和 `test-report.md`，但还不是可重复 CI fixture。
 
 **回滚：** 文档决策可单独调整；如果后续 `ITER-002` 引入 E2E，可把本轮浏览器路径迁移为自动化脚本。
+
+## 2026-07-22：BUG-017-001 先用当前墩状态阻断错误回放
+
+**决策：** 上一墩驻留只在 `phase=playing`、`currentTrick.length=0`、`lastTrick` 完整时启动；如果当前墩已经开始，客户端必须展示当前墩并允许符合回合的操作。上一墩赢家只使用 `lastTrickWinnerSeat`，不再用 `turnSeat` fallback。
+
+**原因：** 用户反馈的核心问题是旧墩回放覆盖当前墩、赢家显示不可信。当前协议缺少 `roundId/trickIndex/stateVersion`，但 `currentTrick.length > 0` 已足以判断“下一墩已经开始”，应立即阻止旧驻留覆盖当前事实。
+
+**影响：** 重连/刷新到已开下一墩的牌局时不会再回放上一墩；缺失赢家字段时显示“本墩结束”，避免把下一位跟牌者错误标为上一墩赢家。
+
+**回滚：** 回滚 `apps/web/src/lib/settledReview.ts`、`apps/web/src/pages/GameTable.tsx` 和 `apps/web/test/settledReview.test.ts` 即可恢复旧驻留逻辑。长期更稳的协议字段由 `ITER-002`/`ITER-007` 后续评估。
