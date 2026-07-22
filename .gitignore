@@ -7,3 +7,5 @@ dist/
 **/.vite/
 .superpowers/
 .pnpm-store/
+.worktrees/
+worktrees/
