@@ -471,6 +471,9 @@
 
 ### ITER-018 当前全量回归
 
+- 第五小闭环 E2E 命令：`pnpm test:e2e apps/web/e2e/quick-start.e2e.ts`
+- 结果：通过，3 个 chromium E2E，44.7 秒；完整快速机器人局在结算倒计时后自动进入下一局，断言 `本局结算` 消失、进入 `叫主|埋底|出牌`，且 `.contract-facts` 仍可见。
+- 截图：`docs/iteration/artifacts/ITER-018/screenshots/quick-start-auto-continued-round.png`。
 - 第四小闭环红测命令：`pnpm test apps/web/test/contract.test.ts apps/web/test/contractSummary.test.tsx`
 - 红测结果：失败，`describeContract` 不输出结构化 `facts`，`ContractSummary` 不渲染 `contract-facts`。
 - 第四小闭环红测命令：`pnpm test apps/web/test/statusBar.test.tsx`
@@ -492,6 +495,6 @@
 - 命令：`pnpm build`
 - 结果：通过，shared/game/bot/server/web 均构建成功。
 - 命令：`pnpm test:e2e`
-- 结果：通过，4 个 chromium E2E，49.4 秒；覆盖两客户端亮牌/反主、快速机器人局自动开局、完整局到解释性结算、普通房间不自动开始。
+- 结果：通过，4 个 chromium E2E，1.0m；覆盖两客户端亮牌/反主、快速机器人局自动开局、完整局到解释性结算并自动续到第二局、普通房间不自动开始。
 - 命令：`git diff --check`
 - 结果：通过，无 whitespace error。

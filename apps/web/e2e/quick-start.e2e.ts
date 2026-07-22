@@ -31,8 +31,8 @@ test('quick robot table starts the game without a manual start click', async ({ 
   await page.screenshot({ path: `${artifactDir}/quick-start-auto-game.png`, fullPage: true });
 });
 
-test('quick robot table can be played to an explanatory settlement', async ({ page }) => {
-  test.setTimeout(60_000);
+test('quick robot table can be played to an explanatory settlement and auto-continued', async ({ page }) => {
+  test.setTimeout(80_000);
   await mkdir(artifactDir, { recursive: true });
 
   await page.goto('/');
@@ -72,6 +72,11 @@ test('quick robot table can be played to an explanatory settlement', async ({ pa
   await expect(page.locator('body')).toContainText('扣底说明');
   await expect(page.locator('body')).toContainText(/秒后自动继续/);
   await page.screenshot({ path: `${artifactDir}/quick-start-explanatory-settlement.png`, fullPage: true });
+
+  await expect(page.locator('body')).not.toContainText('本局结算', { timeout: 15_000 });
+  await expect(page.locator('body')).toContainText(/叫主|埋底|出牌/, { timeout: 5_000 });
+  await expect(page.locator('.contract-facts')).toBeVisible();
+  await page.screenshot({ path: `${artifactDir}/quick-start-auto-continued-round.png`, fullPage: true });
 });
 
 test('regular room creation still waits for an explicit start', async ({ page }) => {

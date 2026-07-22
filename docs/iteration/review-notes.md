@@ -452,3 +452,10 @@
   - 已修复：aria label 改为 `当前主牌、级牌、庄家、分数与反牌窗口`。
 - Recommendation：补无主 facts 单测。
   - 已修复：`contract.test.ts` 的无人亮主/无主 fallback 场景断言 `主 无主 2` 和 `庄 你`。
+
+### 第五小闭环复审：自动续局后的第二局起始状态
+
+- 产品经理：外站结算倒计时的价值不是只显示倒计时，而是玩家不用再操作即可继续下一局。
+- QA 测试工程师：`quick-start.e2e.ts` 的完整局场景扩展为结算后等待倒计时结束，断言 `本局结算` 消失并进入下一局 `叫主|埋底|出牌`。
+- 对抗评审者：该 E2E 同时确认 `ContractSummary` facts 在第二局仍可见，避免自动续局后信息面板空白或停留上一局。
+- Release Reviewer：这是一项测试/证据扩展；如需回滚，只移除 `quick-start-auto-continued-round.png` 和 quick-start E2E 后半段自动续局断言即可。
