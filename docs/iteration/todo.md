@@ -34,11 +34,11 @@
 | ITER-007 | 收墩驻留体验：倒计时、跳过和下一手说明 | P1 | Backlog | ITER-001, ITER-004 | `007-settled-trick-review-ux.md` | Product review P2；`GameTable.tsx` 固定 3s hold |
 | ITER-008 | 重连、旁观、多标签与离线状态恢复验证 | P2 | Backlog | ITER-002 | `008-reconnect-offline-resilience.md` | `store.tsx` localStorage reconnect；server per-player rooms；existing duplicate connection tests |
 | ITER-009 | 发布、部署和回滚证据规范化 | P2 | Backlog | ITER-000 | `009-release-hardening.md` | README 第一版限制；Dockerfile；docs/game-iteration rollback |
-| ITER-010 | 机器人亮庄与反主策略升级 | P1 | Backlog | ITER-013, ITER-014 | `010-bot-bidding-counter-strategy.md` | 用户新增目标；`packages/bot/src/bid.ts`; `packages/game/src/bidding.ts` |
+| ITER-010 | 机器人亮庄与反主策略升级 | P1 | Ready | ITER-013, ITER-014 | `010-bot-bidding-counter-strategy.md` | 用户新增目标；`packages/bot/src/bid.ts`; `packages/game/src/bidding.ts` |
 | ITER-011 | 机器人埋牌策略升级 | P1 | Backlog | ITER-005 | `011-bot-bury-strategy.md` | 用户新增目标；`packages/bot/src/bury.ts`; `packages/game/src/scoring.ts` |
 | ITER-012 | 高级机器人领牌与跟牌策略升级 | P1 | Backlog | ITER-016 | `012-advanced-bot-play-strategy.md` | 用户新增目标；`packages/bot/src/play.ts`; `packages/game/src/follow.ts`; `packages/game/src/trick.ts` |
 | ITER-013 | 任意张数亮庄、大小王反主与亮牌强度模型 | P0 | Done | ITER-000 | `013-flexible-reveal-counter-rules.md` | 用户新增目标；现有 `BidDeclaration.cards` 与 `BidStrength` 只覆盖单张/对子 |
-| ITER-014 | 庄前反牌与庄后反牌阶段 | P0 | Ready | ITER-013 | `014-pre-post-dealer-counter-phases.md` | 用户新增目标；`packages/game/src/round.ts`; bidding -> bury -> play 状态机 |
+| ITER-014 | 庄前反牌与庄后反牌阶段 | P0 | Done | ITER-013 | `014-pre-post-dealer-counter-phases.md` | 用户新增目标；`packages/game/src/round.ts`; bidding -> bury -> play 状态机 |
 | ITER-015 | 出牌提示按钮与可解释推荐 | P1 | Backlog | ITER-012 | `015-play-hint-button.md` | 用户新增目标；`ActionBar.tsx`; `HandFan.tsx`; bot play evaluator |
 | ITER-016 | 甩牌功能与失败惩罚结算 | P0 | Backlog | ITER-005, ITER-013 | `016-throw-play-and-penalty.md` | 用户新增目标；combo/follow/trick/scoring 规则链路 |
 | ITER-017 | 扩展功能缺陷池与回归修复流程 | P0 | Ready | ITER-000 | `017-bugfix-regression-pool.md` | 用户新增目标“多项 bug 修复”；当前体验 review 与测试缺口 |
@@ -49,7 +49,9 @@
 
 当前完成项：`ITER-013 任意张数亮庄、大小王反主与亮牌强度模型`。
 
-下一项：`ITER-014 庄前反牌与庄后反牌阶段`。原因是任意张数和大小王强度模型已经可用，下一步需要把反牌窗口拆成庄前/庄后两个玩家可理解阶段。
+当前完成项：`ITER-014 庄前反牌与庄后反牌阶段`。
+
+下一项：`ITER-010 机器人亮庄与反主策略升级`。原因是任意张数亮牌和庄前/庄后窗口已经具备，bot 亮庄/反主策略现在可以基于真实阶段和强度模型升级。
 
 ## 已知延期但必须追踪
 

@@ -34,6 +34,15 @@ function botAction(room: Room, seat: number): GameAction {
     return cardIds ? { type: 'reveal', cardIds } : { type: 'pass' };
   }
   if (round.phase === 'burying') {
+    if (round.biddingStage === 'post-dealer') {
+      const cardIds = decideBid({
+        hand: round.hands[seat],
+        level: round.level,
+        currentBid: round.currentBid,
+        seat,
+      });
+      if (cardIds) return { type: 'reveal', cardIds };
+    }
     return { type: 'bury', cardIds: decideBury(round.hands[seat], round.trump) };
   }
   const leadCombo = round.currentTrick.length > 0 ? round.currentTrick[0].combo : null;

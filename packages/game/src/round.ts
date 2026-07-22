@@ -1,4 +1,4 @@
-import type { Bid, Card, Rank, RoundResultView, TrumpContext } from '@shengji/shared';
+import type { Bid, BiddingStage, Card, Rank, RoundResultView, TrumpContext } from '@shengji/shared';
 import { KITTY_SIZE, SEAT_COUNT, teamOfSeat } from '@shengji/shared';
 import { bidBeats, detectBid, trumpSuitOfBid } from './bidding';
 import { buildDeck, deal, shuffle, type Rng } from './deck';
@@ -20,6 +20,7 @@ export type RoundState = {
   kitty: Card[];
   currentBid: Bid | null;
   bidHistory: Bid[];
+  biddingStage: BiddingStage;
   biddingTurn: number;
   passStreak: number;
   turnSeat: number;
@@ -54,6 +55,7 @@ export function createRound(opts: {
     kitty,
     currentBid: null,
     bidHistory: [],
+    biddingStage: 'pre-dealer',
     biddingTurn: opts.plannedDealerSeat,
     passStreak: 0,
     turnSeat: opts.plannedDealerSeat,
@@ -92,12 +94,12 @@ function finishBidding(s: RoundState): RoundState {
     trump: { ...s.trump, trumpSuit },
     hands,
     kitty: [],
+    biddingStage: 'post-dealer',
     turnSeat: dealerSeat,
   };
 }
 
-export function applyReveal(s: RoundState, seat: number, cardIds: string[]): StepResult {
-  if (s.phase !== 'bidding') return fail('wrong-phase', `cannot reveal in ${s.phase}`);
+function revealBid(s: RoundState, seat: number, cardIds: string[]): StepResult {
   if (seat !== s.biddingTurn) return fail('wrong-turn', `not seat ${seat}'s bidding turn`);
   const cards = resolveCards(s.hands[seat], cardIds);
   if (cards === null) return fail('cards-not-in-hand', 'reveal cards must come from hand');
@@ -112,17 +114,46 @@ export function applyReveal(s: RoundState, seat: number, cardIds: string[]): Ste
       bidHistory: [...s.bidHistory, bid],
       dealerSeat: seat,
       trump: { ...s.trump, trumpSuit: trumpSuitOfBid(bid) },
+      biddingStage: 'pre-dealer',
       passStreak: 0,
       biddingTurn: (seat + 1) % SEAT_COUNT,
     },
   };
 }
 
+function revealPostDealerBid(s: RoundState, seat: number, cardIds: string[]): StepResult {
+  if (seat !== s.dealerSeat) return fail('not-dealer', 'only dealer can counter after taking kitty');
+  const cards = resolveCards(s.hands[seat], cardIds);
+  if (cards === null) return fail('cards-not-in-hand', 'reveal cards must come from hand');
+  const bid = detectBid(cards, s.level, seat);
+  if (bid === null) return fail('invalid-bid', 'cards do not form a valid bid');
+  if (!bidBeats(bid, s.currentBid)) return fail('invalid-bid', 'bid does not beat current bid');
+  return {
+    ok: true,
+    state: {
+      ...s,
+      currentBid: bid,
+      bidHistory: [...s.bidHistory, bid],
+      trump: { ...s.trump, trumpSuit: trumpSuitOfBid(bid) },
+      biddingStage: 'post-dealer',
+      turnSeat: seat,
+    },
+  };
+}
+
+export function applyReveal(s: RoundState, seat: number, cardIds: string[]): StepResult {
+  if (s.phase === 'bidding') return revealBid(s, seat, cardIds);
+  if (s.phase === 'burying' && s.biddingStage === 'post-dealer') {
+    return revealPostDealerBid(s, seat, cardIds);
+  }
+  return fail('wrong-phase', `cannot reveal in ${s.phase}`);
+}
+
 export function applyPass(s: RoundState, seat: number): StepResult {
   if (s.phase !== 'bidding') return fail('wrong-phase', `cannot pass in ${s.phase}`);
   if (seat !== s.biddingTurn) return fail('wrong-turn', `not seat ${seat}'s bidding turn`);
   const passStreak = s.passStreak + 1;
-  const next: RoundState = { ...s, passStreak, biddingTurn: (seat + 1) % SEAT_COUNT };
+  const next: RoundState = { ...s, passStreak, biddingStage: 'pre-dealer', biddingTurn: (seat + 1) % SEAT_COUNT };
   const done =
     (s.currentBid !== null && passStreak >= SEAT_COUNT - 1) ||
     (s.currentBid === null && passStreak >= SEAT_COUNT);
@@ -139,7 +170,7 @@ export function applyBury(s: RoundState, seat: number, cardIds: string[]): StepR
   const hands = s.hands.map((h, i) => (i === seat ? h.filter((card) => !buried.has(card.id)) : h));
   return {
     ok: true,
-    state: { ...s, phase: 'playing', hands, kitty: cards, turnSeat: s.dealerSeat },
+    state: { ...s, phase: 'playing', hands, kitty: cards, biddingStage: null, turnSeat: s.dealerSeat },
   };
 }
 

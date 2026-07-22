@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { RoomStateView } from '@shengji/shared';
+import type { Bid, RoomStateView } from '@shengji/shared';
 import { describeWaiting } from '../src/lib/waiting';
 
 const NICKNAMES = ['阿明', '机器人2', '机器人3', '机器人4'];
@@ -23,6 +23,7 @@ function mkView(partial: Partial<RoomStateView>): RoomStateView {
     dealerSeat: null,
     currentBid: null,
     bidHistory: [],
+    biddingStage: 'pre-dealer',
     biddingTurn: 1,
     turnSeat: null,
     currentTrick: [],
@@ -36,14 +37,31 @@ function mkView(partial: Partial<RoomStateView>): RoomStateView {
 }
 
 describe('describeWaiting', () => {
+  const bid: Bid = { seat: 0, kind: 'suit-single', suit: 'S', cards: [] };
+
   it('names the bidder during another player bidding turn', () => {
     expect(describeWaiting(mkView({ biddingTurn: 1 }), false)).toBe('等待 机器人2 叫主…');
+  });
+
+  it('names the pre-dealer counter window after someone has revealed', () => {
+    expect(
+      describeWaiting(mkView({ currentBid: bid, biddingTurn: 1, biddingStage: 'pre-dealer' }), false),
+    ).toBe('庄前反牌中，等待 机器人2 表态…');
   });
 
   it('names the dealer during burying', () => {
     expect(
       describeWaiting(mkView({ phase: 'burying', biddingTurn: null, dealerSeat: 2 }), false),
     ).toBe('等待 机器人3 埋底…');
+  });
+
+  it('names the post-dealer counter window before burying', () => {
+    expect(
+      describeWaiting(
+        mkView({ phase: 'burying', biddingStage: 'post-dealer', biddingTurn: null, dealerSeat: 2 }),
+        false,
+      ),
+    ).toBe('等待 机器人3 庄后反牌或埋底…');
   });
 
   it('names the player during play', () => {

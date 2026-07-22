@@ -79,3 +79,13 @@
 **影响：** `BidKind` 扩展为 suit/small-joker/big-joker 的 single/pair/multiple；UI 按真实张数显示亮牌文案。
 
 **回滚：** 回滚 `packages/shared/src/cards.ts`、`packages/game/src/bidding.ts`、`apps/web/src/lib/contract.ts`、`apps/web/src/lib/announcements.ts`、`apps/web/src/components/ActionBar.tsx` 及对应测试即可恢复旧单张/对子模型。
+
+## 2026-07-22：ITER-014 庄后反牌先限定为庄家拿底后反牌
+
+**决策：** 庄前反牌等同于现有 bidding 轮次；庄后反牌窗口插在庄家拿到底牌后、埋底前，并且只有庄家可以用更强亮牌再次反/改主。完成后仍由同一庄家埋底。
+
+**原因：** 这是最小可验收实现：不改变底牌归属和庄家责任，同时支持“拿底后发现更强主牌再反”的真实体验。
+
+**影响：** `RoomStateView` 和 `RoundState` 新增 `biddingStage`；bot 在 burying 阶段会先尝试庄后反牌，再埋底；UI 会在契约摘要、等待文案和 ActionBar 展示庄后窗口。
+
+**回滚：** 回滚 `biddingStage` 字段、`applyReveal` 的 burying 分支、ActionBar 庄后可反 UI 和 botRunner burying reveal 尝试，即可恢复旧的 bidding -> burying -> playing 流程。

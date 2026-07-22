@@ -44,15 +44,26 @@ export function describeContract(view: RoomStateView): ContractSummary {
     const dealer = seatName(view, view.dealerSeat);
     const bid = bidLabel(view.currentBid, level);
     const action = previousBid === null ? '亮主' : '反主';
-    const title = view.phase === 'bidding' ? `${bidder} ${action}` : '本局契约';
+    const title =
+      view.phase === 'bidding'
+        ? `${bidder} ${action}`
+        : view.phase === 'burying' && view.biddingStage === 'post-dealer'
+          ? '庄后反牌窗口'
+          : '本局契约';
     const previousText =
       previousBid === null
         ? ''
         : `（压过 ${seatName(view, previousBid.seat)} ${bidLabel(previousBid, level)}）`;
+    const stageText =
+      view.phase === 'bidding' && view.biddingStage === 'pre-dealer'
+        ? '，庄前反牌中'
+        : view.phase === 'burying' && view.biddingStage === 'post-dealer'
+          ? '，庄后反牌中'
+          : '';
     return {
       mode: 'bid',
       title,
-      detail: `${bidder} ${action} ${bid}${previousText}，${trumpName(view)}，${levelText}，庄家 ${dealer}`,
+      detail: `${bidder} ${action} ${bid}${previousText}，${trumpName(view)}，${levelText}，庄家 ${dealer}${stageText}`,
       cards: view.currentBid.cards,
     };
   }

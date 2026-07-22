@@ -10,7 +10,7 @@ P0
 
 ## 当前状态
 
-Backlog
+Done
 
 ## 背景
 
@@ -75,4 +75,15 @@ Backlog
 
 ## 执行记录
 
-尚未开始。
+2026-07-22：
+
+- 进入实现阶段。
+- 本轮最小规则决策：庄前反牌沿用现有 bidding 轮次；庄后反牌发生在庄家拿到底牌后、埋底前，只有庄家可以用手牌中的更强亮牌再次反/改主。
+- 本项暂不加入所有玩家庄后轮流反牌；若后续需要，新增规则变体任务。
+- RED：`pnpm test packages/game/test/round.test.ts` 失败 3 项，失败点为缺少 `biddingStage`、庄后 reveal 被 `wrong-phase` 拒绝、非庄后反牌错误码不明确。
+- GREEN：新增 `biddingStage`，`applyReveal` 在 `burying/post-dealer` 允许庄家用更强牌反主；`pnpm test packages/game/test/round.test.ts` 通过 11 项。
+- UI RED：`pnpm test apps/web/test/waiting.test.ts apps/web/test/contract.test.ts apps/web/test/actionBar.test.tsx` 失败 5 项，等待文案、契约摘要和埋底操作栏均未显示庄前/庄后窗口。
+- UI GREEN：等待文案显示 `庄前反牌中` / `庄后反牌或埋底`，契约摘要显示 `庄后反牌窗口`，庄家埋底操作栏显示 `庄后可反` 选项；目标 UI 测试通过 15 项。
+- 全量验证：`pnpm test` 通过 21 个测试文件、158 个测试；`pnpm typecheck` 通过；`pnpm build` 通过。
+- 浏览器验证：机器人局中先看到 `庄前反牌中` 文案；随后同一庄家机器人4 在埋底前从 `♦2 一对` 庄后反成 `大王一对`，再进入出牌。
+- 浏览器截图：`docs/iteration/014-browser-post-dealer-counter-result.png`。

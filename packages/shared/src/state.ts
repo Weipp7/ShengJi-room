@@ -1,6 +1,7 @@
 import type { Bid, Card, Rank, TrumpContext } from './cards';
 
 export type Phase = 'waiting' | 'bidding' | 'burying' | 'playing' | 'scoring';
+export type BiddingStage = 'pre-dealer' | 'post-dealer' | null;
 
 export type SeatView = {
   seat: number;
@@ -34,6 +35,7 @@ export type RoomStateView = {
   dealerSeat: number | null;
   currentBid: Bid | null;
   bidHistory: Bid[];
+  biddingStage: BiddingStage;
   biddingTurn: number | null;
   turnSeat: number | null;
   currentTrick: TrickPlayView[];

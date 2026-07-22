@@ -118,6 +118,12 @@ export default function ActionBar({
       {view.phase === 'burying' &&
         (isDealer ? (
           <>
+            {view.biddingStage === 'post-dealer' && (
+              <>
+                <span className="muted">庄后可反</span>
+                <BidOptions view={view} onBid={onBid} />
+              </>
+            )}
             <span className="bury-count">已选 {selectedCount}/8</span>
             <button className="primary" disabled={selectedCount !== 8} onClick={onBury}>
               确认埋牌

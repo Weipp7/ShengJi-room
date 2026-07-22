@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import type { RoundState, StepResult } from '../src/round';
 import { createRound, applyReveal, applyPass, applyBury, applyPlay } from '../src/round';
 import { validateLead, validateFollow } from '../src/follow';
-import { c, mulberry32 } from './helpers';
+import { c, joker, mulberry32 } from './helpers';
 
 function expectOk(r: StepResult): RoundState {
   if (!r.ok) throw new Error(`step failed: ${r.error.code}`);
@@ -98,6 +98,58 @@ describe('round state machine', () => {
     expect(s.dealerSeat).toBe(1);
     expect(s.trump.trumpSuit).toBe('H');
     expect(s.hands[1]).toHaveLength(10);
+    expect(s.biddingStage).toBe('post-dealer');
+  });
+
+  it('dealer can counter again after taking the kitty and before burying', () => {
+    let s = createRound({ plannedDealerSeat: 0, teamLevels: [2, 2], rng: mulberry32(99) });
+    s = {
+      ...s,
+      hands: [[joker('small', 0), joker('big', 0)], [], [], []],
+      kitty: [
+        c('C', 4, 0),
+        c('C', 5, 0),
+        c('C', 6, 0),
+        c('C', 7, 0),
+        c('C', 8, 0),
+        c('C', 9, 0),
+        c('C', 10, 0),
+        c('C', 11, 0),
+      ],
+    };
+
+    s = expectOk(applyReveal(s, 0, ['joker-small-0']));
+    s = expectOk(applyPass(s, 1));
+    s = expectOk(applyPass(s, 2));
+    s = expectOk(applyPass(s, 3));
+    expect(s.phase).toBe('burying');
+    expect(s.biddingStage).toBe('post-dealer');
+
+    s = expectOk(applyReveal(s, 0, ['joker-big-0']));
+    expect(s.phase).toBe('burying');
+    expect(s.biddingStage).toBe('post-dealer');
+    expect(s.currentBid).toMatchObject({ seat: 0, kind: 'big-joker-single', suit: null });
+    expect(s.bidHistory.map((bid) => bid.kind)).toEqual(['small-joker-single', 'big-joker-single']);
+    expect(s.turnSeat).toBe(0);
+  });
+
+  it('only the dealer can counter during the post-dealer window', () => {
+    let s = createRound({ plannedDealerSeat: 0, teamLevels: [2, 2], rng: mulberry32(100) });
+    s = {
+      ...s,
+      hands: [[joker('small', 0)], [joker('big', 0)], [], []],
+      kitty: [],
+    };
+
+    s = expectOk(applyReveal(s, 0, ['joker-small-0']));
+    s = expectOk(applyPass(s, 1));
+    s = expectOk(applyPass(s, 2));
+    s = expectOk(applyPass(s, 3));
+
+    expect(applyReveal(s, 1, ['joker-big-0'])).toMatchObject({
+      ok: false,
+      error: { code: 'not-dealer' },
+    });
   });
 
   it('invalid and repeated reveal attempts do not mutate state', () => {

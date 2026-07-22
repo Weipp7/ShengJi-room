@@ -46,6 +46,7 @@ export function projectRoomState(room: Room, playerId: string): RoomStateView {
     dealerSeat: round?.dealerSeat ?? null,
     currentBid: round?.currentBid ?? null,
     bidHistory: round?.bidHistory ?? [],
+    biddingStage: round?.biddingStage ?? null,
     biddingTurn: round && round.phase === 'bidding' ? round.biddingTurn : null,
     turnSeat: round && round.phase === 'playing' ? round.turnSeat : null,
     currentTrick: round?.currentTrick.map((p) => ({ seat: p.seat, cards: p.cards })) ?? [],

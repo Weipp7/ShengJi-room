@@ -27,6 +27,7 @@ function mkView(partial: Partial<RoomStateView>): RoomStateView {
     dealerSeat: null,
     currentBid: null,
     bidHistory: [],
+    biddingStage: 'pre-dealer',
     biddingTurn: 0,
     turnSeat: null,
     currentTrick: [],
@@ -79,6 +80,19 @@ describe('describeContract', () => {
     expect(summary.detail).toContain('级牌 2');
     expect(summary.detail).toContain('庄家 机器人3');
     expect(summary.cards).toEqual(pairBid.cards);
+  });
+
+  it('marks the pre-dealer counter window while bidding continues', () => {
+    const summary = describeContract(
+      mkView({
+        currentBid: pairBid,
+        bidHistory: [pairBid],
+        trump: { trumpSuit: 'H', level: 2 },
+        dealerSeat: 2,
+        biddingStage: 'pre-dealer',
+      }),
+    );
+    expect(summary.detail).toContain('庄前反牌中');
   });
 
   it('persists the winning bid through playing', () => {
@@ -137,6 +151,21 @@ describe('describeContract', () => {
     );
     expect(jokerSummary.detail).toContain('你 亮主 大王单张');
     expect(jokerSummary.detail).toContain('本局无主');
+  });
+
+  it('marks the post-dealer counter window before burying', () => {
+    const summary = describeContract(
+      mkView({
+        phase: 'burying',
+        currentBid: pairBid,
+        bidHistory: [pairBid],
+        trump: { trumpSuit: 'H', level: 2 },
+        dealerSeat: 2,
+        biddingStage: 'post-dealer',
+      }),
+    );
+    expect(summary.title).toContain('庄后反牌');
+    expect(summary.detail).toContain('庄后反牌中');
   });
 
   it('describes no-bid fallback dealer and no-trump contract', () => {

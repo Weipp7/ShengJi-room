@@ -10,8 +10,18 @@ export function describeWaiting(view: RoomStateView, holdActive: boolean): strin
   if (holdActive) {
     return `${seatName(view, view.lastTrickWinnerSeat)} 收墩，下一墩即将开始…`;
   }
-  if (view.phase === 'bidding') return `等待 ${seatName(view, view.biddingTurn)} 叫主…`;
-  if (view.phase === 'burying') return `等待 ${seatName(view, view.dealerSeat)} 埋底…`;
+  if (view.phase === 'bidding') {
+    if (view.currentBid !== null && view.biddingStage === 'pre-dealer') {
+      return `庄前反牌中，等待 ${seatName(view, view.biddingTurn)} 表态…`;
+    }
+    return `等待 ${seatName(view, view.biddingTurn)} 叫主…`;
+  }
+  if (view.phase === 'burying') {
+    if (view.biddingStage === 'post-dealer') {
+      return `等待 ${seatName(view, view.dealerSeat)} 庄后反牌或埋底…`;
+    }
+    return `等待 ${seatName(view, view.dealerSeat)} 埋底…`;
+  }
   if (view.phase === 'playing') return `等待 ${seatName(view, view.turnSeat)} 出牌…`;
   return '等待下一步…';
 }
