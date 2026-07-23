@@ -57,6 +57,7 @@ function pairGroupsForThrow(cards: TrickPlayView['cards'], trump: TrumpContext):
 }
 
 const REASON_MESSAGES: Record<PlayReason, string> = {
+  'lead-safe-throw-pairs': '你这组甩牌风险很低，可以主动甩出建立优势。',
   'lead-tractor': '你有可控拖拉机，可以主动领出建立节奏。',
   'lead-strong-pair': '你有强对子，可以先领出争取主动。',
   'lead-cheapest-single': '先出低价值散牌，保留更有用的牌。',

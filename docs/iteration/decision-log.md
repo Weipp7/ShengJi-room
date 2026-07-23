@@ -279,3 +279,13 @@
 **影响：** `decideBid` 行为保持不变，服务端无需改协议；新增测试能固定强开局、低质量不亮、保护当前合约、无更强候选和反主样本。主动甩牌进入后续独立小闭环。完整局 E2E 预算同步放宽，避免较慢确定性牌局被误判为业务回归。
 
 **回滚：** 回滚 `packages/bot/src/bid.ts` 的 `explainBid`、`packages/bot/src/index.ts` 导出、`packages/bot/test/bot.test.ts` 新增解释/领牌样本，以及 `apps/web/e2e/quick-start.e2e.ts` 的预算调整即可；不影响实际 bot 决策或服务端协议。
+
+## 2026-07-22：ITER-018 主动甩牌只允许非全知可证明安全场景
+
+**决策：** bot 领牌阶段可以主动甩 `throw-pairs`，但第一版只允许“仅凭自己手牌即可证明不会被压住”的场景：对每个子对子，所有可压过它的更高对子都必须已经在自己手牌中成对出现；整组还必须不是普通 combo。
+
+**原因：** 甩牌失败判定在规则层需要全体玩家手牌，但真实玩家和 bot 决策不应偷看对手手牌。该边界能覆盖极少数明确安全的大主牌组，同时避免让 bot 因未知风险频繁吃 `20 * n` 惩罚。
+
+**影响：** `explainPlay` 新增 `lead-safe-throw-pairs`，`decidePlay` 会在无安全散单且甩牌可证明安全时领出完整甩牌；无法证明安全的副牌多对子仍走原保守领牌策略。前端提示复用同一 reason 文案。
+
+**回滚：** 回滚 `packages/bot/src/play.ts` 的 `safeThrowPairs` / `lead-safe-throw-pairs`、`apps/web/src/lib/playHint.ts` 对应文案和 `packages/bot/test/bot.test.ts` 新增甩牌样本，即可恢复不主动甩牌的 bot 策略。

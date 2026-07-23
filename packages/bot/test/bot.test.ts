@@ -10,6 +10,7 @@ import {
   detectBid,
   bidBeats,
   detectCombo,
+  evaluateThrowLead,
   countPoints,
   shuffle,
   type RoundState,
@@ -450,6 +451,155 @@ describe('decidePlay', () => {
 
     expect(plan.cardIds).toEqual(['S-14-0', 'S-14-1']);
     expect(plan.reason).toBe('lead-strong-pair');
+  });
+
+  it('lead: safely throws trump pairs when every higher pair is already in hand', () => {
+    const trump: TrumpContext = { trumpSuit: null, level: 2 };
+    const hand = [
+      cardBy('S-2-0'),
+      cardBy('S-2-1'),
+      cardBy('H-2-0'),
+      cardBy('H-2-1'),
+      cardBy('D-2-0'),
+      cardBy('D-2-1'),
+      cardBy('C-2-0'),
+      cardBy('C-2-1'),
+      cardBy('joker-small-0'),
+      cardBy('joker-small-1'),
+      cardBy('joker-big-0'),
+      cardBy('joker-big-1'),
+    ];
+    const plan = explainPlay({
+      hand,
+      trump,
+      leadCombo: null,
+      currentTrick: [],
+      seat: 0,
+      trickPointsSoFar: 0,
+    });
+
+    expect(plan.cardIds).toEqual([
+      'C-2-0',
+      'C-2-1',
+      'D-2-0',
+      'D-2-1',
+      'H-2-0',
+      'H-2-1',
+      'S-2-0',
+      'S-2-1',
+      'joker-small-0',
+      'joker-small-1',
+      'joker-big-0',
+      'joker-big-1',
+    ]);
+    expect(plan.reason).toBe('lead-safe-throw-pairs');
+    expect(detectCombo(plan.cardIds.map(cardBy), trump)).toBeNull();
+    expect(
+      evaluateThrowLead({
+        seat: 0,
+        cards: plan.cardIds.map(cardBy),
+        hand,
+        hands: [
+          hand,
+          [cardBy('S-14-0'), cardBy('S-14-1')],
+          [cardBy('H-14-0'), cardBy('H-14-1')],
+          [cardBy('D-14-0'), cardBy('D-14-1')],
+        ],
+        trump,
+      }),
+    ).toMatchObject({ type: 'success' });
+  });
+
+  it('lead: avoids an unproven side-suit throw even with multiple pairs', () => {
+    const trump: TrumpContext = { trumpSuit: 'H', level: 2 };
+    const plan = explainPlay({
+      hand: [
+        cardBy('S-9-0'),
+        cardBy('S-9-1'),
+        cardBy('S-12-0'),
+        cardBy('S-12-1'),
+        cardBy('H-3-0'),
+      ],
+      trump,
+      leadCombo: null,
+      currentTrick: [],
+      seat: 0,
+      trickPointsSoFar: 0,
+    });
+
+    expect(plan.reason).not.toBe('lead-safe-throw-pairs');
+    expect(plan.cardIds).toHaveLength(1);
+  });
+
+  it('lead: treats main-level and joker pairs as an ordinary tractor, not a throw', () => {
+    const trump: TrumpContext = { trumpSuit: 'H', level: 2 };
+    const plan = explainPlay({
+      hand: [
+        cardBy('H-2-0'),
+        cardBy('H-2-1'),
+        cardBy('joker-small-0'),
+        cardBy('joker-small-1'),
+        cardBy('joker-big-0'),
+        cardBy('joker-big-1'),
+      ],
+      trump,
+      leadCombo: null,
+      currentTrick: [],
+      seat: 0,
+      trickPointsSoFar: 0,
+    });
+
+    expect(plan.reason).toBe('lead-tractor');
+    expect(detectCombo(plan.cardIds.map(cardBy), trump)?.type).toBe('tractor');
+  });
+
+  it('lead: can safely throw off-suit level pairs with main-level and joker pairs held', () => {
+    const trump: TrumpContext = { trumpSuit: 'H', level: 2 };
+    const hand = [
+      cardBy('S-2-0'),
+      cardBy('S-2-1'),
+      cardBy('D-2-0'),
+      cardBy('D-2-1'),
+      cardBy('C-2-0'),
+      cardBy('C-2-1'),
+      cardBy('H-2-0'),
+      cardBy('H-2-1'),
+      cardBy('joker-small-0'),
+      cardBy('joker-small-1'),
+      cardBy('joker-big-0'),
+      cardBy('joker-big-1'),
+    ];
+    const plan = explainPlay({
+      hand,
+      trump,
+      leadCombo: null,
+      currentTrick: [],
+      seat: 0,
+      trickPointsSoFar: 0,
+    });
+
+    expect(plan.reason).toBe('lead-safe-throw-pairs');
+    expect(detectCombo(plan.cardIds.map(cardBy), trump)).toBeNull();
+  });
+
+  it('lead: does not treat small and big joker pairs alone as a throw', () => {
+    const trump: TrumpContext = { trumpSuit: 'H', level: 2 };
+    const plan = explainPlay({
+      hand: [
+        cardBy('joker-small-0'),
+        cardBy('joker-small-1'),
+        cardBy('joker-big-0'),
+        cardBy('joker-big-1'),
+      ],
+      trump,
+      leadCombo: null,
+      currentTrick: [],
+      seat: 0,
+      trickPointsSoFar: 0,
+    });
+
+    expect(plan.reason).toBe('lead-tractor');
+    expect(plan.cardIds).toEqual(['joker-small-0', 'joker-small-1', 'joker-big-0', 'joker-big-1']);
   });
 
   it('teammate winning: dumps point card', () => {

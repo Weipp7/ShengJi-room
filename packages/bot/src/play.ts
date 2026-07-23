@@ -1,8 +1,10 @@
 import type { Card, Combo, EffectiveSuit, TrumpContext } from '@shengji/shared';
 import { teamOfSeat } from '@shengji/shared';
 import {
+  buildDeck,
   cardPoints,
   cardStrength,
+  detectCombo,
   effectiveSuit,
   findPairs,
   findTractors,
@@ -21,6 +23,7 @@ export type BotPlayView = {
 };
 
 export type PlayReason =
+  | 'lead-safe-throw-pairs'
   | 'lead-tractor'
   | 'lead-strong-pair'
   | 'lead-cheapest-single'
@@ -60,6 +63,16 @@ function cardsStrength(cards: Card[], trump: TrumpContext): number {
   return Math.max(...cards.map((card) => cardStrength(card, trump)));
 }
 
+function pairCanBeat(target: Card[], candidate: Card[], trump: TrumpContext): boolean {
+  const targetSuit = effectiveSuit(target[0], trump);
+  const candidateSuit = effectiveSuit(candidate[0], trump);
+  if (targetSuit === 'trump') {
+    return candidateSuit === 'trump' && cardStrength(candidate[0], trump) > cardStrength(target[0], trump);
+  }
+  if (candidateSuit === 'trump') return true;
+  return candidateSuit === targetSuit && cardStrength(candidate[0], trump) > cardStrength(target[0], trump);
+}
+
 function sortByStrength(cards: Card[][], trump: TrumpContext): Card[][] {
   return [...cards].sort((a, b) => {
     const diff = cardsStrength(a, trump) - cardsStrength(b, trump);
@@ -81,6 +94,36 @@ function sortByGroupScore(
     if (diff !== 0) return diff;
     return cardsStrength(a, trump) - cardsStrength(b, trump);
   });
+}
+
+function provablyUnbeatablePair(pair: Card[], trump: TrumpContext, counts: Map<string, number>): boolean {
+  const deckPairs = findPairs(buildDeck(), trump);
+  return deckPairs
+    .filter((candidate) => pairCanBeat(pair, candidate, trump))
+    .every((candidate) => (counts.get(faceKey(candidate[0])) ?? 0) >= 2);
+}
+
+function safeThrowPairs(hand: Card[], trump: TrumpContext, counts: Map<string, number>): Card[] | null {
+  const pairs = findPairs(hand, trump).filter((pair) => provablyUnbeatablePair(pair, trump, counts));
+  const bySuit = new Map<EffectiveSuit, Card[][]>();
+  for (const pair of pairs) {
+    const suit = effectiveSuit(pair[0], trump);
+    const group = bySuit.get(suit) ?? [];
+    group.push(pair);
+    bySuit.set(suit, group);
+  }
+
+  const candidates = [...bySuit.values()]
+    .filter((group) => group.length >= 2)
+    .map((group) => sortByStrength(group, trump).flat())
+    .filter((cards) => detectCombo(cards, trump) === null)
+    .sort((a, b) => {
+      const byLength = b.length - a.length;
+      if (byLength !== 0) return byLength;
+      return cardsStrength(b, trump) - cardsStrength(a, trump);
+    });
+
+  return candidates[0] ?? null;
 }
 
 function trumpingGroups(lead: Combo, winning: Combo, cards: Card[], trump: TrumpContext): Card[][] {
@@ -135,6 +178,11 @@ function decideLead(view: BotPlayView): PlayPlan {
   if (safeSingles.length > 0) {
     const sorted = [...safeSingles].sort((a, b) => avoidScore(a, trump) - avoidScore(b, trump));
     return plan([sorted[0]], 'lead-preserve-shape-single');
+  }
+
+  const safeThrow = safeThrowPairs(hand, trump, counts);
+  if (safeThrow !== null) {
+    return plan(safeThrow, 'lead-safe-throw-pairs');
   }
 
   // 两连对拖拉机优先领出（取最强一组）

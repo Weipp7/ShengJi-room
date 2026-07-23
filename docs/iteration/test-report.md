@@ -485,6 +485,10 @@
 - 第六小闭环 E2E 修复：`apps/web/e2e/quick-start.e2e.ts` 将完整局用例超时从 80 秒扩到 130 秒，自动推进窗口从 45 秒扩到 100 秒；验证行为和断言不变。
 - 第六小闭环 E2E 复测命令：`pnpm test:e2e`
 - 结果：通过，4 个 chromium E2E，1.0 分钟。
+- 第七小闭环红测命令：`pnpm test packages/bot/test/bot.test.ts --no-cache`
+- 红测结果：失败，安全甩牌样本旧策略只领出小王对 + 大王对拖拉机，没有主动甩出完整安全主牌组。
+- 第七小闭环复测命令：`pnpm test packages/bot/test/bot.test.ts --no-cache`
+- 结果：通过，1 个测试文件，38 个测试；覆盖可证明安全的主动主牌甩牌，无法证明安全的副牌多对子不主动甩，以及主花色级牌/王普通拖拉机、非主级牌安全甩牌、仅王对不足以甩牌的边界。
 - 第四小闭环红测命令：`pnpm test apps/web/test/contract.test.ts apps/web/test/contractSummary.test.tsx`
 - 红测结果：失败，`describeContract` 不输出结构化 `facts`，`ContractSummary` 不渲染 `contract-facts`。
 - 第四小闭环红测命令：`pnpm test apps/web/test/statusBar.test.tsx`
@@ -500,7 +504,7 @@
 - 代码审查修复命令：`pnpm test:e2e apps/web/e2e/quick-start.e2e.ts`
 - 结果：通过，3 个 chromium E2E，35.2 秒；普通建房测试预置残留 `shengji:quickStartPending`，仍等待显式开始。
 - 命令：`pnpm test`
-- 结果：通过，32 个测试文件，240 个测试。
+- 结果：通过，32 个测试文件，245 个测试。
 - 命令：`pnpm typecheck`
 - 结果：通过，`pnpm -r exec tsc --noEmit` 无错误。
 - 命令：`pnpm build`

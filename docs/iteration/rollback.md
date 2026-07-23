@@ -20,6 +20,8 @@
 - `apps/web/src/lib/contract.ts` / `apps/web/src/components/ContractSummary.tsx`：结构化 contract facts，集中展示主、队伍级牌、庄、闲家分和反牌窗口。
 - `apps/web/src/components/StatusBar.tsx`：收敛为房间、阶段、当前操作方和离开入口。
 - `packages/bot/src/bid.ts` / `packages/bot/src/index.ts`：新增 `explainBid`，让亮主/反主策略输出原因码和候选计数；`decideBid` 复用该解释结果。
+- `packages/bot/src/play.ts`：新增 `lead-safe-throw-pairs`，只在自己手牌可证明安全时主动甩牌。
+- `apps/web/src/lib/playHint.ts`：新增主动安全甩牌的提示文案。
 - `apps/web/src/styles.css`：快速开始状态、结算结果条和倒计时样式。
 - `apps/web/e2e/quick-start.e2e.ts`：快速开局、完整局到结算、普通房间不自动开局的浏览器回归；完整局用例预算为 130 秒、自动推进窗口为 100 秒，以覆盖共享 seeded server 顺序下较慢牌局。
 - `apps/web/test/quickStart.test.ts`、`apps/web/test/resultModal.test.tsx`、`packages/game/test/scoring.test.ts`、`packages/bot/test/bot.test.ts`：快速 session、结算 UI、外站 55 分样本和 bot 策略解释样本覆盖。
@@ -32,9 +34,10 @@
 3. 恢复 `ResultModal.tsx` 原结算布局，移除 `GameTable.tsx` 自动继续 effect 和倒计时传参。
 4. 恢复 `StatusBar.tsx` 原主/级/庄/闲家分字段，移除 `ContractSummary.tsx` 的 `contract-facts` 和 `contract.ts` 的 `facts` 字段。
 5. 如只回滚 bot 策略解释样本，恢复 `packages/bot/src/bid.ts` 为只导出 `decideBid`，删除 `packages/bot/src/index.ts` 的 `explainBid` 导出和 `packages/bot/test/bot.test.ts` 中的解释样本；服务端行为无需改动。
-6. 删除或调整 `quick-start.e2e.ts`、`bidding-flow.e2e.ts` 中依赖新行为的断言。
-7. 如果回滚完整 `ITER-018`，恢复 `playwright.config.ts` 的并行配置；如果仍保留多个共享 seeded E2E，则不要恢复并行。
-8. 更新 `todo.md`、`plan.md`、`test-report.md`、`review-notes.md`、`decision-log.md` 和 `018-shengji-org-benchmark.md`。
+6. 如只回滚 bot 主动甩牌，删除 `packages/bot/src/play.ts` 中的安全甩牌 helper 和 `lead-safe-throw-pairs` reason，删除 `apps/web/src/lib/playHint.ts` 对应文案，并删除 bot 主动甩牌样本测试。
+7. 删除或调整 `quick-start.e2e.ts`、`bidding-flow.e2e.ts` 中依赖新行为的断言。
+8. 如果回滚完整 `ITER-018`，恢复 `playwright.config.ts` 的并行配置；如果仍保留多个共享 seeded E2E，则不要恢复并行。
+9. 更新 `todo.md`、`plan.md`、`test-report.md`、`review-notes.md`、`decision-log.md` 和 `018-shengji-org-benchmark.md`。
 
 ### 风险说明
 

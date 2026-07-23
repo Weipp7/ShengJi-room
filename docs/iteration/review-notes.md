@@ -470,3 +470,12 @@
 - 对抗评审者：外站机器人会领多张组合，但本项目不应让 bot 访问全量对手手牌来“知道”甩牌是否失败；主动甩牌必须另建非全知风险模型。
 - QA 回归：全套 `pnpm test:e2e` 首次失败于完整快速机器人局 45 秒推进窗口不足，页面仍在正常出牌阶段；单独复跑该用例通过。已把完整局验证预算扩到 130 秒/100 秒，避免把较慢确定性牌局误判为回归。
 - Release Reviewer：回滚范围小，涉及 `packages/bot/src/bid.ts`、`packages/bot/src/index.ts`、`packages/bot/test/bot.test.ts`、`apps/web/e2e/quick-start.e2e.ts` 的验证预算和 ITER-018 文档；服务端和前端协议无变化。
+
+### 第七小闭环复审：非全知主动甩牌策略
+
+- 产品经理：外站机器人能领出多张组合，本项目需要向“会主动打大牌型”靠近，但不能因此让 bot 变成偷看全手牌的全知玩家。
+- 规则专家：采纳保守边界。只有当 bot 自己已成对持有所有能压住子对子的更高对子时，才允许主动甩；副牌多对子无法证明不会被主对压住时继续保守。
+- QA 测试工程师：新增两条 `explainPlay` 样本，可证明安全的无主级牌/王组主动甩，无法证明安全的副牌多对子不主动甩；目标测试 `pnpm test packages/bot/test/bot.test.ts --no-cache` 通过 35 项。
+- 代码评审 Minor：补充主花色级牌 + 王对仍按普通拖拉机、非主级牌组可安全甩、仅小王对 + 大王对不足以甩牌三个边界样本；目标测试更新为 38 项通过。
+- 前端交互评审：新增 `lead-safe-throw-pairs` 提示文案，玩家点击提示时能理解这是低风险主动甩牌。
+- Release Reviewer：回滚重点是 `packages/bot/src/play.ts` 的安全甩牌 helper、`apps/web/src/lib/playHint.ts` reason 文案和 `packages/bot/test/bot.test.ts` 新样本；不涉及服务端协议和甩牌规则层。
