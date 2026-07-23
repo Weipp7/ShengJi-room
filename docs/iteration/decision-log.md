@@ -269,3 +269,13 @@
 **影响：** `describeContract` 增加 `facts` 输出，组件和 E2E 可直接验证 `主`、`队伍级牌`、`庄`、`闲家`、`反牌窗口` 是否可见；紧凑横屏隐藏长句 detail，保留 facts 和亮出的牌。
 
 **回滚：** 恢复 `StatusBar.tsx` 中主/级/庄/闲家分展示，移除 `ContractSummary.tsx` 的 `contract-facts` 渲染、`contract.ts` 的 `facts` 字段和对应测试/CSS。
+
+## 2026-07-22：ITER-018 先补亮主解释样本，不启用 bot 主动甩牌
+
+**决策：** 本轮机器人策略样本池先补 `explainBid`，让亮主/反主和既有 `explainBury`、`explainPlay` 一样可被测试追溯；暂不让 bot 主动甩牌。
+
+**原因：** `shengji.org` 重采样显示机器人会领出多张组合，但本项目 bot 当前没有非全知风险模型。如果直接让 bot 访问全量 `hands` 判断甩牌是否失败，会让机器人拥有玩家没有的信息；如果不做风险模型就主动甩牌，又可能频繁触发惩罚并破坏体验。
+
+**影响：** `decideBid` 行为保持不变，服务端无需改协议；新增测试能固定强开局、低质量不亮、保护当前合约、无更强候选和反主样本。主动甩牌进入后续独立小闭环。完整局 E2E 预算同步放宽，避免较慢确定性牌局被误判为业务回归。
+
+**回滚：** 回滚 `packages/bot/src/bid.ts` 的 `explainBid`、`packages/bot/src/index.ts` 导出、`packages/bot/test/bot.test.ts` 新增解释/领牌样本，以及 `apps/web/e2e/quick-start.e2e.ts` 的预算调整即可；不影响实际 bot 决策或服务端协议。

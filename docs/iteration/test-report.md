@@ -474,6 +474,17 @@
 - 第五小闭环 E2E 命令：`pnpm test:e2e apps/web/e2e/quick-start.e2e.ts`
 - 结果：通过，3 个 chromium E2E，44.7 秒；完整快速机器人局在结算倒计时后自动进入下一局，断言 `本局结算` 消失、进入 `叫主|埋底|出牌`，且 `.contract-facts` 仍可见。
 - 截图：`docs/iteration/artifacts/ITER-018/screenshots/quick-start-auto-continued-round.png`。
+- 第六小闭环外站重采样：in-app browser 打开 `https://shengji.org/`，点击 `快速开始 4人`，进入 `出牌中`；DOM 可见机器人 C 亮 `♥2`、主花色 `♥`、级牌 `2`、庄家 `机器人 C`；点击 `💡 提示` 后 `0/9` 变为 `9/9`，按钮变为 `出牌(9)`。
+- 采样记录：`docs/iteration/artifacts/ITER-018/bot-strategy-samples.md`。
+- 限制：本次 browser 截图调用超时，未新增截图文件；沿用此前已提交的 `shengji-org-*.png` 截图作为视觉证据。
+- 第六小闭环红测命令：`pnpm test packages/bot/test/bot.test.ts --no-cache`
+- 红测结果：失败，4 项新增亮主/反主解释样本均报 `explainBid is not a function`。
+- 第六小闭环复测命令：`pnpm test packages/bot/test/bot.test.ts --no-cache`
+- 结果：通过，1 个测试文件，33 个测试；覆盖强开局亮大王对、低质量单张级牌不亮、保护当前同队/自身合约、无更强候选过牌、单大王反单小王、有安全散单时保形、无安全散单时主动领拖拉机、无安全散单/拖拉机时主动领强对子。
+- 第六小闭环 E2E 失败记录：首次全套 `pnpm test:e2e` 失败，完整快速机器人局在共享 seeded server 顺序下 45 秒推进窗口不足，仍停在出牌阶段，未进入 `本局结算` 断言。
+- 第六小闭环 E2E 修复：`apps/web/e2e/quick-start.e2e.ts` 将完整局用例超时从 80 秒扩到 130 秒，自动推进窗口从 45 秒扩到 100 秒；验证行为和断言不变。
+- 第六小闭环 E2E 复测命令：`pnpm test:e2e`
+- 结果：通过，4 个 chromium E2E，1.0 分钟。
 - 第四小闭环红测命令：`pnpm test apps/web/test/contract.test.ts apps/web/test/contractSummary.test.tsx`
 - 红测结果：失败，`describeContract` 不输出结构化 `facts`，`ContractSummary` 不渲染 `contract-facts`。
 - 第四小闭环红测命令：`pnpm test apps/web/test/statusBar.test.tsx`
@@ -489,7 +500,7 @@
 - 代码审查修复命令：`pnpm test:e2e apps/web/e2e/quick-start.e2e.ts`
 - 结果：通过，3 个 chromium E2E，35.2 秒；普通建房测试预置残留 `shengji:quickStartPending`，仍等待显式开始。
 - 命令：`pnpm test`
-- 结果：通过，32 个测试文件，232 个测试。
+- 结果：通过，32 个测试文件，240 个测试。
 - 命令：`pnpm typecheck`
 - 结果：通过，`pnpm -r exec tsc --noEmit` 无错误。
 - 命令：`pnpm build`

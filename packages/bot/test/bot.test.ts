@@ -15,7 +15,7 @@ import {
   type RoundState,
   type StepResult,
 } from '@shengji/game';
-import { decideBid, decideBury, decidePlay, explainBury, explainPlay } from '../src/index';
+import { decideBid, decideBury, decidePlay, explainBid, explainBury, explainPlay } from '../src/index';
 
 function mulberry32(seed: number): () => number {
   let a = seed >>> 0;
@@ -39,6 +39,110 @@ const cardBy = (id: string): Card => {
 };
 
 describe('decideBid', () => {
+  it('explains opening with the strongest high-confidence bid', () => {
+    const hand = [
+      cardBy('S-2-0'),
+      cardBy('S-14-0'),
+      cardBy('S-13-0'),
+      cardBy('S-12-0'),
+      cardBy('S-11-0'),
+      cardBy('joker-big-0'),
+      cardBy('joker-big-1'),
+    ];
+
+    const plan = explainBid({ hand, level: 2, currentBid: null, seat: 0 });
+
+    expect(plan.cardIds).toEqual(['joker-big-0', 'joker-big-1']);
+    expect(plan.reason).toBe('open-strongest');
+    expect(plan.legalCandidateCount).toBe(2);
+    expect(plan.eligibleCandidateCount).toBe(2);
+  });
+
+  it('explains passing a low-confidence opening bid', () => {
+    const hand = [
+      cardBy('S-2-0'),
+      cardBy('S-14-0'),
+      cardBy('S-13-0'),
+      cardBy('S-12-0'),
+      cardBy('D-4-0'),
+    ];
+
+    const plan = explainBid({ hand, level: 2, currentBid: null, seat: 0 });
+
+    expect(plan.cardIds).toBeNull();
+    expect(plan.reason).toBe('pass-low-confidence');
+    expect(plan.legalCandidateCount).toBe(1);
+    expect(plan.eligibleCandidateCount).toBe(0);
+  });
+
+  it('explains protecting a teammate contract from a same-count category upgrade', () => {
+    const currentBid = detectBid([cardBy('H-2-0'), cardBy('H-2-1')], 2, 2);
+    expect(currentBid).not.toBeNull();
+
+    const plan = explainBid({
+      hand: [cardBy('joker-small-0'), cardBy('joker-small-1')],
+      level: 2,
+      currentBid,
+      seat: 0,
+    });
+
+    expect(plan.cardIds).toBeNull();
+    expect(plan.reason).toBe('pass-protect-current-contract');
+    expect(plan.legalCandidateCount).toBe(1);
+    expect(plan.eligibleCandidateCount).toBe(0);
+  });
+
+  it('explains protecting its own current contract from a same-count category upgrade', () => {
+    const currentBid = detectBid([cardBy('H-2-0'), cardBy('H-2-1')], 2, 0);
+    expect(currentBid).not.toBeNull();
+
+    const plan = explainBid({
+      hand: [cardBy('joker-small-0'), cardBy('joker-small-1')],
+      level: 2,
+      currentBid,
+      seat: 0,
+    });
+
+    expect(plan.cardIds).toBeNull();
+    expect(plan.reason).toBe('pass-protect-current-contract');
+    expect(plan.legalCandidateCount).toBe(1);
+    expect(plan.eligibleCandidateCount).toBe(0);
+  });
+
+  it('explains passing when there is no stronger bid candidate', () => {
+    const currentBid = detectBid([cardBy('joker-big-0'), cardBy('joker-big-1')], 2, 1);
+    expect(currentBid).not.toBeNull();
+
+    const plan = explainBid({
+      hand: [cardBy('S-2-0'), cardBy('S-2-1'), cardBy('joker-small-0'), cardBy('joker-small-1')],
+      level: 2,
+      currentBid,
+      seat: 0,
+    });
+
+    expect(plan.cardIds).toBeNull();
+    expect(plan.reason).toBe('pass-no-legal-bid');
+    expect(plan.legalCandidateCount).toBe(0);
+    expect(plan.eligibleCandidateCount).toBe(0);
+  });
+
+  it('explains countering with a stronger bid', () => {
+    const currentBid = detectBid([cardBy('joker-small-0')], 2, 1);
+    expect(currentBid).not.toBeNull();
+
+    const plan = explainBid({
+      hand: [cardBy('joker-big-0')],
+      level: 2,
+      currentBid,
+      seat: 0,
+    });
+
+    expect(plan.cardIds).toEqual(['joker-big-0']);
+    expect(plan.reason).toBe('counter-stronger');
+    expect(plan.legalCandidateCount).toBe(1);
+    expect(plan.eligibleCandidateCount).toBe(1);
+  });
+
   it('opens with the strongest high-confidence bid instead of the first weak suit', () => {
     const hand = [
       cardBy('S-2-0'),
@@ -300,6 +404,52 @@ describe('decidePlay', () => {
 
     expect(plan.cardIds).toEqual(['C-3-0']);
     expect(plan.reason).toBe('lead-preserve-shape-single');
+  });
+
+  it('lead: starts with a tractor when no safe loose single is available', () => {
+    const trump: TrumpContext = { trumpSuit: 'H', level: 2 };
+    const plan = explainPlay({
+      hand: [
+        cardBy('S-7-0'),
+        cardBy('S-7-1'),
+        cardBy('S-8-0'),
+        cardBy('S-8-1'),
+        cardBy('S-10-0'),
+        cardBy('S-10-1'),
+        cardBy('H-3-0'),
+      ],
+      trump,
+      leadCombo: null,
+      currentTrick: [],
+      seat: 0,
+      trickPointsSoFar: 0,
+    });
+
+    expect(plan.cardIds).toEqual(['S-7-0', 'S-7-1', 'S-8-0', 'S-8-1']);
+    expect(plan.reason).toBe('lead-tractor');
+  });
+
+  it('lead: starts with a strong pair when no safe loose single or tractor is available', () => {
+    const trump: TrumpContext = { trumpSuit: 'H', level: 2 };
+    const plan = explainPlay({
+      hand: [
+        cardBy('S-14-0'),
+        cardBy('S-14-1'),
+        cardBy('S-10-0'),
+        cardBy('S-10-1'),
+        cardBy('D-13-0'),
+        cardBy('D-13-1'),
+        cardBy('H-3-0'),
+      ],
+      trump,
+      leadCombo: null,
+      currentTrick: [],
+      seat: 0,
+      trickPointsSoFar: 0,
+    });
+
+    expect(plan.cardIds).toEqual(['S-14-0', 'S-14-1']);
+    expect(plan.reason).toBe('lead-strong-pair');
   });
 
   it('teammate winning: dumps point card', () => {

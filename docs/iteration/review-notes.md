@@ -459,3 +459,14 @@
 - QA 测试工程师：`quick-start.e2e.ts` 的完整局场景扩展为结算后等待倒计时结束，断言 `本局结算` 消失并进入下一局 `叫主|埋底|出牌`。
 - 对抗评审者：该 E2E 同时确认 `ContractSummary` facts 在第二局仍可见，避免自动续局后信息面板空白或停留上一局。
 - Release Reviewer：这是一项测试/证据扩展；如需回滚，只移除 `quick-start-auto-continued-round.png` 和 quick-start E2E 后半段自动续局断言即可。
+
+### 第六小闭环复审：亮主/反主策略解释样本池
+
+- 产品经理：外站快速开始的策略体验来自“机器人动作可被看见且节奏不断”，本项目下一步不能只靠随机试玩评价 bot 是否自然。已采纳为固定策略样本池，先让亮主/反主输出原因码。
+- 真实玩家体验官：外站重采样中，顶部明确展示机器人 C 亮 `♥2`、当前主 `♥`、级牌 `2` 和庄家；提示按钮能在 9 张跟牌场景中一次性选满。已记录到 `bot-strategy-samples.md`。
+- 规则专家：`explainBid` 不改变 `availableBids` / `bidBeats` 的规则强度，只解释既有候选选择；`decideBid` 复用解释结果，避免双逻辑。
+- QA 测试工程师：新增亮主/反主解释样本，红测失败于 `explainBid is not a function`；补充保护自身合约、无更强候选和领牌样本后 `pnpm test packages/bot/test/bot.test.ts --no-cache` 通过 33 项。
+- QA 补充建议：外站可见机器人会主动领多张组合。已采纳为 `explainPlay` 固定样本：无安全散单时主动领拖拉机、无安全散单/拖拉机时主动领强对子；不改变现有策略。
+- 对抗评审者：外站机器人会领多张组合，但本项目不应让 bot 访问全量对手手牌来“知道”甩牌是否失败；主动甩牌必须另建非全知风险模型。
+- QA 回归：全套 `pnpm test:e2e` 首次失败于完整快速机器人局 45 秒推进窗口不足，页面仍在正常出牌阶段；单独复跑该用例通过。已把完整局验证预算扩到 130 秒/100 秒，避免把较慢确定性牌局误判为回归。
+- Release Reviewer：回滚范围小，涉及 `packages/bot/src/bid.ts`、`packages/bot/src/index.ts`、`packages/bot/test/bot.test.ts`、`apps/web/e2e/quick-start.e2e.ts` 的验证预算和 ITER-018 文档；服务端和前端协议无变化。

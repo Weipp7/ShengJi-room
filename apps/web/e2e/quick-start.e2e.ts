@@ -32,14 +32,14 @@ test('quick robot table starts the game without a manual start click', async ({ 
 });
 
 test('quick robot table can be played to an explanatory settlement and auto-continued', async ({ page }) => {
-  test.setTimeout(80_000);
+  test.setTimeout(130_000);
   await mkdir(artifactDir, { recursive: true });
 
   await page.goto('/');
   await page.getByPlaceholder('你的昵称').fill('E2E整局');
   await page.getByRole('button', { name: '开一桌' }).click();
 
-  const deadline = Date.now() + 45_000;
+  const deadline = Date.now() + 100_000;
   while (Date.now() < deadline) {
     const bodyText = await page.locator('body').innerText();
     if (bodyText.includes('本局结算')) break;
