@@ -9,6 +9,7 @@ function c(suit: Suit, rank: Rank, copy: number): Card {
 function mkView(partial: Partial<RoomStateView>): RoomStateView {
   return {
     roomCode: 'TEST1',
+    chaodiEnabled: false,
     phase: 'playing',
     seats: ['你', '右家', '对家', '左家'].map((nickname, seat) => ({
       seat,
@@ -23,10 +24,14 @@ function mkView(partial: Partial<RoomStateView>): RoomStateView {
     yourHand: [c('S', 11, 0), c('S', 14, 0), c('D', 3, 0)],
     trump: { trumpSuit: 'H', level: 2 },
     dealerSeat: 0,
+    buryingSeat: null,
     currentBid: null,
     bidHistory: [],
+    isFirstRound: false,
+    redealCount: 0,
     biddingStage: null,
     biddingTurn: null,
+    bidWindowEndsAt: null,
     turnSeat: 0,
     currentTrick: [{ seat: 1, cards: [c('S', 10, 0)] }],
     lastTrick: [],
@@ -56,7 +61,7 @@ describe('createPlayHint', () => {
     expect(hint).toBeNull();
   });
 
-  it('rebuilds a successful throw-pairs lead before suggesting a follow play', () => {
+  it('rebuilds a successful mixed throw lead before suggesting a follow play', () => {
     const leadCards = [c('S', 9, 0), c('S', 9, 1), c('S', 12, 0), c('S', 12, 1)];
     const throwEvent: ThrowEventView = {
       id: 'throw-seat-1',
@@ -64,6 +69,10 @@ describe('createPlayHint', () => {
       attemptedCards: leadCards,
       actualCards: leadCards,
       challengedCards: [],
+      components: [
+        { type: 'pair', suit: 'S', strength: 12, cards: [c('S', 12, 0), c('S', 12, 1)] },
+        { type: 'pair', suit: 'S', strength: 9, cards: [c('S', 9, 0), c('S', 9, 1)] },
+      ],
       success: true,
       n: 2,
       penaltyPoints: 0,
@@ -87,7 +96,7 @@ describe('createPlayHint', () => {
     );
 
     expect(hint?.cardIds).toEqual(['S-3-0', 'S-3-1', 'S-4-0', 'S-4-1']);
-    expect(hint?.reasonCode).toBe('follow-throw-pairs');
+    expect(hint?.reasonCode).toBe('follow-throw');
     expect(hint?.message).toContain('甩牌');
   });
 
@@ -99,6 +108,10 @@ describe('createPlayHint', () => {
       attemptedCards: leadCards,
       actualCards: leadCards,
       challengedCards: [],
+      components: [
+        { type: 'pair', suit: 'S', strength: 12, cards: [c('S', 12, 0), c('S', 12, 1)] },
+        { type: 'pair', suit: 'S', strength: 9, cards: [c('S', 9, 0), c('S', 9, 1)] },
+      ],
       success: true,
       n: 2,
       penaltyPoints: 0,
@@ -112,7 +125,7 @@ describe('createPlayHint', () => {
       challengedCards: [c('S', 9, 0), c('S', 9, 1)],
       penaltyPoints: 40,
       beneficiaryTeam: 0,
-      reason: 'beatable-pair',
+      reason: 'beatable-component',
     };
 
     const before = playHintContextKey(mkView({ currentTrick: [{ seat: 1, cards: leadCards, throwEvent: successEvent }] }));

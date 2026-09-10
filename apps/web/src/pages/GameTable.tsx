@@ -216,9 +216,16 @@ export default function GameTable() {
   };
 
   const anchor = view.yourSeat ?? 0;
-  const activeSeat = view.phase === 'bidding' ? view.biddingTurn : view.turnSeat;
+  const activeSeat =
+    view.phase === 'bidding'
+      ? view.biddingTurn
+      : view.phase === 'burying'
+        ? view.buryingSeat
+        : view.turnSeat;
   const canSelect =
-    canSubmitAction && view.yourSeat !== null && (view.phase === 'burying' || view.phase === 'playing');
+    canSubmitAction &&
+    view.yourSeat !== null &&
+    ((view.phase === 'burying' && view.buryingSeat === view.yourSeat) || view.phase === 'playing');
 
   return (
     <div className="game-table">

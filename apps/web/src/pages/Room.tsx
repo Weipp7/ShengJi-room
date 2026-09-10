@@ -52,6 +52,9 @@ export default function Room() {
       <header className="room-header">
         <div>
           <span className="muted">房间码</span> <span className="room-code big">{view.roomCode}</span>
+          <span className={`room-rule-badge room-rule-badge-header ${view.chaodiEnabled ? 'on' : ''}`}>
+            {view.chaodiEnabled ? '炒底 ON' : '炒底 OFF'}
+          </span>
         </div>
         <div className="room-header-right">
           <span className={`conn-dot ${state.status}`} title={state.status} />

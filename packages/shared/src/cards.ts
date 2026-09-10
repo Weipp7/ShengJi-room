@@ -11,7 +11,7 @@ export type TrumpContext = { trumpSuit: Suit | null; level: Rank };
 
 export type EffectiveSuit = Suit | 'trump';
 
-export type ComboType = 'single' | 'pair' | 'tractor' | 'throw-pairs';
+export type ComboType = 'single' | 'pair' | 'tractor' | 'throw';
 
 export type Combo = {
   type: ComboType;
@@ -24,12 +24,7 @@ export type Combo = {
 export type BidKind =
   | 'suit-single'
   | 'suit-pair'
-  | 'suit-multiple'
-  | 'small-joker-single'
   | 'small-joker-pair'
-  | 'small-joker-multiple'
-  | 'big-joker-single'
-  | 'big-joker-pair'
-  | 'big-joker-multiple';
+  | 'big-joker-pair';
 
 export type Bid = { seat: number; kind: BidKind; suit: Suit | null; cards: Card[] };

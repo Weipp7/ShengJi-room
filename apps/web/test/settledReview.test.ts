@@ -16,6 +16,7 @@ function mkView(partial: Partial<RoomStateView>): RoomStateView {
   ];
   return {
     roomCode: 'TEST1',
+    chaodiEnabled: false,
     phase: 'playing',
     seats: ['你', '右家', '对家', '左家'].map((nickname, seat) => ({
       seat,
@@ -30,10 +31,14 @@ function mkView(partial: Partial<RoomStateView>): RoomStateView {
     yourHand: [c('H-3-0'), c('H-4-0')],
     trump: { trumpSuit: 'H', level: 2 },
     dealerSeat: 0,
+    buryingSeat: null,
     currentBid: null,
     bidHistory: [],
+    isFirstRound: false,
+    redealCount: 0,
     biddingStage: null,
     biddingTurn: null,
+    bidWindowEndsAt: null,
     turnSeat: 2,
     currentTrick: [],
     lastTrick,

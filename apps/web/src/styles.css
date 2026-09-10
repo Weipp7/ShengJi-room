@@ -186,6 +186,63 @@ input:focus {
   gap: 16px;
 }
 
+.room-rule-control {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 14px 18px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--card-bg);
+}
+
+.room-rule-control > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.rule-switch {
+  min-width: 76px;
+  border-color: rgba(255, 255, 255, 0.2);
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+
+.rule-switch.on {
+  border-color: var(--gold);
+  background: rgba(245, 197, 66, 0.22);
+  color: #ffe68b;
+}
+
+.rule-switch.off {
+  color: var(--muted);
+}
+
+.room-rule-badge {
+  display: inline-flex;
+  align-items: center;
+  width: max-content;
+  padding: 2px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.room-rule-badge.on {
+  border-color: rgba(245, 197, 66, 0.55);
+  background: rgba(245, 197, 66, 0.12);
+  color: #ffe68b;
+}
+
+.room-rule-badge-header {
+  margin-left: 12px;
+  vertical-align: middle;
+}
+
 .card {
   background: var(--card-bg);
   border: 1px solid var(--line);

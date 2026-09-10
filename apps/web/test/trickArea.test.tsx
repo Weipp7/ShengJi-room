@@ -11,6 +11,7 @@ function c(suit: 'S' | 'H' | 'D' | 'C', rank: number, copy: number): Card {
 function mkView(partial: Partial<RoomStateView>): RoomStateView {
   return {
     roomCode: 'TEST1',
+    chaodiEnabled: false,
     phase: 'scoring',
     seats: ['你', '右家', '对家', '左家'].map((nickname, seat) => ({
       seat,
@@ -25,9 +26,14 @@ function mkView(partial: Partial<RoomStateView>): RoomStateView {
     yourHand: [],
     trump: { trumpSuit: 'S', level: 2 },
     dealerSeat: 0,
+    buryingSeat: null,
     currentBid: null,
     bidHistory: [],
+    isFirstRound: false,
+    redealCount: 0,
+    biddingStage: null,
     biddingTurn: null,
+    bidWindowEndsAt: null,
     turnSeat: null,
     currentTrick: [],
     lastTrick: [],
@@ -68,11 +74,15 @@ describe('TrickArea', () => {
       attemptedCards: [c('S', 5, 0), c('S', 5, 1), c('S', 8, 0), c('S', 8, 1)],
       actualCards: [c('S', 5, 0), c('S', 5, 1)],
       challengedCards: [c('S', 5, 0), c('S', 5, 1)],
+      components: [
+        { type: 'pair', suit: 'S', strength: 8, cards: [c('S', 8, 0), c('S', 8, 1)] },
+        { type: 'pair', suit: 'S', strength: 5, cards: [c('S', 5, 0), c('S', 5, 1)] },
+      ],
       success: false,
       n: 2,
       penaltyPoints: 40,
       beneficiaryTeam: 1,
-      reason: 'beatable-pair',
+      reason: 'beatable-component',
     };
     const plays: TrickPlayView[] = [{ seat: 0, cards: throwEvent.actualCards, throwEvent }];
 
@@ -84,7 +94,7 @@ describe('TrickArea', () => {
     );
 
     expect(html).toContain('甩牌失败');
-    expect(html).toContain('实际领出');
+    expect(html).toContain('强制出小');
     expect(html).toContain('-40');
   });
 
@@ -95,6 +105,10 @@ describe('TrickArea', () => {
       attemptedCards: [c('S', 9, 0), c('S', 9, 1), c('S', 12, 0), c('S', 12, 1)],
       actualCards: [c('S', 9, 0), c('S', 9, 1), c('S', 12, 0), c('S', 12, 1)],
       challengedCards: [],
+      components: [
+        { type: 'pair', suit: 'S', strength: 12, cards: [c('S', 12, 0), c('S', 12, 1)] },
+        { type: 'pair', suit: 'S', strength: 9, cards: [c('S', 9, 0), c('S', 9, 1)] },
+      ],
       success: true,
       n: 2,
       penaltyPoints: 0,
@@ -111,7 +125,7 @@ describe('TrickArea', () => {
     );
 
     expect(html).toContain('甩牌成功');
-    expect(html).toContain('2 个对子');
+    expect(html).toContain('4 张 / 2 组');
   });
 
   it('keeps throw context in the last-trick review markup', () => {
@@ -121,11 +135,15 @@ describe('TrickArea', () => {
       attemptedCards: [c('S', 5, 0), c('S', 5, 1), c('S', 8, 0), c('S', 8, 1)],
       actualCards: [c('S', 5, 0), c('S', 5, 1)],
       challengedCards: [c('S', 5, 0), c('S', 5, 1)],
+      components: [
+        { type: 'pair', suit: 'S', strength: 8, cards: [c('S', 8, 0), c('S', 8, 1)] },
+        { type: 'pair', suit: 'S', strength: 5, cards: [c('S', 5, 0), c('S', 5, 1)] },
+      ],
       success: false,
       n: 2,
       penaltyPoints: 40,
       beneficiaryTeam: 1,
-      reason: 'beatable-pair',
+      reason: 'beatable-component',
     };
     const plays: TrickPlayView[] = [
       { seat: 0, cards: throwEvent.actualCards, throwEvent },

@@ -8,6 +8,7 @@ describe('RoomManager', () => {
     expect(room.code).toMatch(/^[A-Z0-9]{5}$/);
     expect(room.seats[0].player?.playerId).toBe('p1');
     expect(room.hostPlayerId).toBe('p1');
+    expect(room.chaodiEnabled).toBe(false);
 
     expect(m.joinRoom('ZZZZZ', 'p2', 'Bob', null)).toMatchObject({
       ok: false,
@@ -47,6 +48,15 @@ describe('RoomManager', () => {
     m.joinRoom(room.code, 'p2', 'Bob', null);
     m.joinRoom(room.code, 'p2', 'Bob', null);
     expect(room.spectators.filter((p) => p.playerId === 'p2')).toHaveLength(1);
+  });
+
+  it('stores and lists the chaodi option chosen at creation', () => {
+    const m = new RoomManager();
+    const room = m.createRoom('p1', 'Alice', null, true);
+    expect(room.chaodiEnabled).toBe(true);
+    expect(m.listOpenRooms()).toContainEqual(
+      expect.objectContaining({ code: room.code, chaodiEnabled: true }),
+    );
   });
 
   it('sweepIdle removes stale rooms and reports removed codes', () => {

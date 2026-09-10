@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { teamOfSeat } from '@shengji/shared';
-import { ROUND_SCORE_TABLE, kittyBonus, settleRound } from '../src/scoring';
+import { teamOfSeat, type Combo } from '@shengji/shared';
+import { ROUND_SCORE_TABLE, kittyBonus, kittyMultiplierCards, settleRound } from '../src/scoring';
 import { c } from './helpers';
 
 function lookup(points: number) {
@@ -9,16 +9,18 @@ function lookup(points: number) {
 
 describe('ROUND_SCORE_TABLE', () => {
   it.each([
+    [-20, 'dealer', 3],
     [0, 'dealer', 3],
-    [5, 'dealer', 2],
-    [35, 'dealer', 2],
+    [1, 'dealer', 2],
+    [39, 'dealer', 2],
     [40, 'dealer', 1],
-    [75, 'dealer', 1],
+    [79, 'dealer', 1],
     [80, 'defender', 0],
-    [115, 'defender', 0],
+    [119, 'defender', 0],
     [120, 'defender', 1],
-    [155, 'defender', 1],
+    [159, 'defender', 1],
     [160, 'defender', 2],
+    [199, 'defender', 2],
     [200, 'defender', 3],
     [235, 'defender', 3],
   ])('defender %i pts → %s +%i', (pts, winner, delta) => {
@@ -35,6 +37,44 @@ describe('kittyBonus', () => {
     expect(kittyBonus(kitty, 2, true)).toBe(60);
     expect(kittyBonus(kitty, 4, true)).toBe(240); // 两连对拖拉机
     expect(kittyBonus(kitty, 2, false)).toBe(0);
+  });
+
+  it('uses the largest component card count for a mixed throw', () => {
+    const tractor = [c('S', 14, 0), c('S', 14, 1), c('S', 13, 0), c('S', 13, 1)];
+    const pair = [c('S', 11, 0), c('S', 11, 1)];
+    const single = [c('S', 12, 0)];
+    const lead: Combo = {
+      type: 'throw',
+      cards: [...tractor, ...pair, ...single],
+      suit: 'S',
+      strength: 14,
+      components: [
+        { type: 'tractor', cards: tractor, suit: 'S', strength: 14 },
+        { type: 'pair', cards: pair, suit: 'S', strength: 11 },
+        { type: 'single', cards: single, suit: 'S', strength: 12 },
+      ],
+    };
+
+    expect(kittyMultiplierCards(lead)).toBe(4);
+    expect(kittyBonus([c('D', 5, 0), c('D', 10, 0)], kittyMultiplierCards(lead), true)).toBe(240);
+  });
+
+  it('uses one card for an all-single throw', () => {
+    const cards = [c('S', 14, 0), c('S', 13, 0), c('S', 12, 0)];
+    const lead: Combo = {
+      type: 'throw',
+      cards,
+      suit: 'S',
+      strength: 14,
+      components: cards.map((card, index) => ({
+        type: 'single' as const,
+        cards: [card],
+        suit: 'S' as const,
+        strength: 14 - index,
+      })),
+    };
+
+    expect(kittyMultiplierCards(lead)).toBe(1);
   });
 });
 
@@ -110,7 +150,7 @@ describe('settleRound', () => {
     expect(res.winnerTeam).toBe(1);
   });
 
-  it('subtracts defender-team failed throw penalties from defender effective points without going below zero', () => {
+  it('keeps a negative defender score after defender-team throw penalties', () => {
     const res = settleRound({
       dealerSeat: 0,
       defenderTrickPoints: 20,
@@ -123,8 +163,9 @@ describe('settleRound', () => {
 
     expect(res.baseDefenderPoints).toBe(20);
     expect(res.throwPenaltyDelta).toBe(-60);
-    expect(res.defenderPoints).toBe(0);
+    expect(res.defenderPoints).toBe(-40);
     expect(res.winnerTeam).toBe(0);
+    expect(res.levelDelta).toBe(3);
   });
 
   it('defenders reach exactly 80 → change dealer without level up', () => {

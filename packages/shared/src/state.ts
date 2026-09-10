@@ -1,7 +1,7 @@
-import type { Bid, Card, Rank, TrumpContext } from './cards';
+import type { Bid, Card, Combo, Rank, TrumpContext } from './cards';
 
 export type Phase = 'waiting' | 'bidding' | 'burying' | 'playing' | 'scoring';
-export type BiddingStage = 'pre-dealer' | 'post-dealer' | null;
+export type BiddingStage = 'dealing' | 'pre-dealer' | 'post-bury' | null;
 
 export type SeatView = {
   seat: number;
@@ -18,11 +18,12 @@ export type ThrowEventView = {
   attemptedCards: Card[];
   actualCards: Card[];
   challengedCards: Card[];
+  components: Combo[];
   success: boolean;
   n: number;
   penaltyPoints: number;
   beneficiaryTeam: 0 | 1 | null;
-  reason: 'beatable-pair' | null;
+  reason: 'beatable-component' | null;
 };
 
 export type TrickPlayView = { seat: number; cards: Card[]; throwEvent?: ThrowEventView };
@@ -42,6 +43,7 @@ export type RoundResultView = {
 
 export type RoomStateView = {
   roomCode: string;
+  chaodiEnabled: boolean;
   phase: Phase;
   seats: SeatView[];
   hostSeat: number | null;
@@ -53,6 +55,10 @@ export type RoomStateView = {
   bidHistory: Bid[];
   biddingStage: BiddingStage;
   biddingTurn: number | null;
+  bidWindowEndsAt: number | null;
+  isFirstRound: boolean;
+  redealCount: number;
+  buryingSeat: number | null;
   turnSeat: number | null;
   currentTrick: TrickPlayView[];
   lastTrick: TrickPlayView[];

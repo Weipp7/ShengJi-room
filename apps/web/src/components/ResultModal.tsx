@@ -21,20 +21,20 @@ export default function ResultModal({ view, autoContinueSeconds = null, onNextRo
   const defenderPointsBeforeThrow = r.baseDefenderPoints ?? r.defenderPoints - throwDelta;
   const trickDefenderPoints = Math.max(0, defenderPointsBeforeThrow - r.kittyBonus);
   const dealerTeam = view.dealerSeat === null ? 0 : teamOfSeat(view.dealerSeat);
-  const dealerWon = r.winnerTeam === dealerTeam;
-  const outcomeText = dealerWon
-    ? r.levelDelta >= 3
-      ? '庄家大胜! +3级'
-      : r.levelDelta === 2
-        ? '庄家大胜! +2级'
-        : '庄家小胜 +1级'
-    : r.levelDelta === 0
-      ? '换庄 (不升级)'
-      : r.levelDelta === 1
-        ? '闲家小胜 +1级'
-        : r.levelDelta === 2
-          ? '闲家大胜! +2级'
-          : '闲家大胜! +3级';
+  const outcomeText =
+    r.defenderPoints <= 0
+      ? '大光，庄家方升 3 级'
+      : r.defenderPoints < 40
+        ? '小光，庄家方升 2 级'
+        : r.defenderPoints < 80
+          ? '庄家方升 1 级'
+          : r.defenderPoints < 120
+            ? '闲家上台'
+            : r.defenderPoints < 160
+              ? '闲家上台并升 1 级'
+              : r.defenderPoints < 200
+                ? '闲家上台并升 2 级'
+                : '闲家升 3 级';
   const defenderWonLastTrick =
     view.lastTrickWinnerSeat !== null && view.dealerSeat !== null && teamOfSeat(view.lastTrickWinnerSeat) !== dealerTeam;
   const kittyExplanation =

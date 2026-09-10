@@ -19,8 +19,8 @@ function playOf(trick: TrickPlayView[], seat: number): TrickPlayView | undefined
 function throwLabel(play: TrickPlayView): string | null {
   const event = play.throwEvent;
   if (!event) return null;
-  if (event.success) return `甩牌成功 · ${event.n} 个对子`;
-  return `甩牌失败 · 实际领出 · -${event.penaltyPoints}`;
+  if (event.success) return `甩牌成功 · ${event.attemptedCards.length} 张 / ${event.components.length} 组`;
+  return `甩牌失败 · 强制出小 · -${event.penaltyPoints}`;
 }
 
 // 中央出牌区：十字布局展示本墩四家出牌，左上角按钮按需展开回看上一墩

@@ -1,20 +1,22 @@
 import type { Bid, BiddingStage, Card, Rank, RoundResultView, ThrowEventView, TrumpContext } from '@shengji/shared';
-import { KITTY_SIZE, SEAT_COUNT, teamOfSeat } from '@shengji/shared';
-import { bidBeats, detectBid, trumpSuitOfBid } from './bidding';
+import { HAND_SIZE, KITTY_SIZE, SEAT_COUNT, teamOfSeat } from '@shengji/shared';
+import { bidBeats, detectBid, isPairBid, trumpSuitOfBid } from './bidding';
 import { buildDeck, deal, shuffle, type Rng } from './deck';
 import { validateFollow, validateLead } from './follow';
 import { countPoints } from './points';
-import { settleRound } from './scoring';
+import { kittyMultiplierCards, settleRound } from './scoring';
 import { evaluateThrowLead } from './throw';
 import { trickWinner, type TrickPlay } from './trick';
 
 export type RoundPhase = 'bidding' | 'burying' | 'playing' | 'scoring';
 
+export const PRE_KITTY_BID_WINDOW_MS = 5_000;
+
 export type RoundState = {
   phase: RoundPhase;
   level: Rank;
   teamLevels: [Rank, Rank];
-  dealerSeat: number; // bidding 期间为“计划庄家”，亮主可改变
+  dealerSeat: number; // 首局抢庄时随最后亮主者改变；后续局始终保持计划庄家
   plannedDealerSeat: number; // 无人亮主时的兜底庄家
   trump: TrumpContext;
   hands: Card[][];
@@ -22,11 +24,21 @@ export type RoundState = {
   currentBid: Bid | null;
   bidHistory: Bid[];
   biddingStage: BiddingStage;
-  biddingTurn: number;
+  biddingTurn: number | null;
+  bidWindowEndsAt: number | null;
+  bidWindowDurationMs: number;
   passStreak: number;
+  isFirstRound: boolean;
+  redealCount: number;
+  chaodiEnabled: boolean;
+  dealtCount: number;
+  postBuryBidQueue: number[];
+  buryingSeat: number | null;
+  lastBuryingSeat: number | null;
   turnSeat: number;
   currentTrick: TrickPlay[];
   lastTrick: TrickPlay[];
+  trickHistory: TrickPlay[][];
   lastTrickWinnerSeat: number | null;
   throwEvents: ThrowEventView[];
   throwPenaltyPoints: [number, number];
@@ -37,6 +49,10 @@ export type RoundState = {
 
 export type RoundError = { code: string; message: string };
 export type StepResult = { ok: true; state: RoundState } | { ok: false; error: RoundError };
+export type CloseBidWindowResult =
+  | { ok: true; action: 'redeal' }
+  | { ok: true; action: 'take-kitty'; state: RoundState }
+  | { ok: false; error: RoundError };
 
 const fail = (code: string, message: string): StepResult => ({ ok: false, error: { code, message } });
 
@@ -44,9 +60,16 @@ export function createRound(opts: {
   plannedDealerSeat: number;
   teamLevels: [Rank, Rank];
   rng: Rng;
+  isFirstRound?: boolean;
+  progressiveDeal?: boolean;
+  chaodiEnabled?: boolean;
+  redealCount?: number;
+  now?: number;
+  bidWindowDurationMs?: number;
 }): RoundState {
   const level = opts.teamLevels[teamOfSeat(opts.plannedDealerSeat)];
   const { hands, kitty } = deal(shuffle(buildDeck(), opts.rng));
+  const progressiveDeal = opts.progressiveDeal ?? false;
   return {
     phase: 'bidding',
     level,
@@ -58,18 +81,44 @@ export function createRound(opts: {
     kitty,
     currentBid: null,
     bidHistory: [],
-    biddingStage: 'pre-dealer',
-    biddingTurn: opts.plannedDealerSeat,
+    biddingStage: progressiveDeal ? 'dealing' : 'pre-dealer',
+    biddingTurn: null,
+    bidWindowEndsAt:
+      progressiveDeal
+        ? null
+        : (opts.now ?? Date.now()) + (opts.bidWindowDurationMs ?? PRE_KITTY_BID_WINDOW_MS),
+    bidWindowDurationMs: opts.bidWindowDurationMs ?? PRE_KITTY_BID_WINDOW_MS,
     passStreak: 0,
+    isFirstRound: opts.isFirstRound ?? true,
+    redealCount: opts.redealCount ?? 0,
+    chaodiEnabled: opts.chaodiEnabled ?? false,
+    dealtCount: progressiveDeal ? 0 : HAND_SIZE,
+    postBuryBidQueue: [],
+    buryingSeat: null,
+    lastBuryingSeat: null,
     turnSeat: opts.plannedDealerSeat,
     currentTrick: [],
     lastTrick: [],
+    trickHistory: [],
     lastTrickWinnerSeat: null,
     throwEvents: [],
     throwPenaltyPoints: [0, 0],
     defenderTrickPoints: 0,
     tricksPlayed: 0,
     result: null,
+  };
+}
+
+// 服务端每次推进一轮发牌（四家各摸一张）。摸满后开启全员共享的 5 秒亮主窗口。
+export function advanceDeal(s: RoundState, now: number = Date.now()): RoundState {
+  if (s.phase !== 'bidding' || s.biddingStage !== 'dealing') return s;
+  if (s.dealtCount < HAND_SIZE) return { ...s, dealtCount: s.dealtCount + 1 };
+  return {
+    ...s,
+    biddingStage: 'pre-dealer',
+    biddingTurn: null,
+    bidWindowEndsAt: now + s.bidWindowDurationMs,
+    passStreak: 0,
   };
 }
 
@@ -87,9 +136,13 @@ function resolveCards(hand: Card[], cardIds: string[]): Card[] | null {
   return cards;
 }
 
-// 结束叫主：底牌并入庄家手 → burying
-function finishBidding(s: RoundState): RoundState {
-  const dealerSeat = s.currentBid !== null ? s.currentBid.seat : s.plannedDealerSeat;
+function visibleBidHand(s: RoundState, seat: number): Card[] {
+  return s.biddingStage === 'dealing' ? s.hands[seat].slice(0, s.dealtCount) : s.hands[seat];
+}
+
+// 摸底前叫主结束：首局由最后亮主者成为庄家；后续局庄家保持预定结果。
+function takeKitty(s: RoundState): RoundState {
+  const dealerSeat = s.isFirstRound && s.currentBid !== null ? s.currentBid.seat : s.plannedDealerSeat;
   const trumpSuit = s.currentBid !== null ? trumpSuitOfBid(s.currentBid) : null;
   const hands = s.hands.map((h, seat) => (seat === dealerSeat ? [...h, ...s.kitty] : h));
   return {
@@ -99,83 +152,181 @@ function finishBidding(s: RoundState): RoundState {
     trump: { ...s.trump, trumpSuit },
     hands,
     kitty: [],
-    biddingStage: 'post-dealer',
+    biddingStage: null,
+    biddingTurn: null,
+    bidWindowEndsAt: null,
+    postBuryBidQueue: [],
+    buryingSeat: dealerSeat,
     turnSeat: dealerSeat,
   };
 }
 
-function revealBid(s: RoundState, seat: number, cardIds: string[]): StepResult {
+function revealBeforeKitty(
+  s: RoundState,
+  seat: number,
+  cardIds: string[],
+  now: number,
+): StepResult {
+  if (s.biddingStage !== 'dealing' && s.biddingStage !== 'pre-dealer') {
+    return fail('wrong-phase', `cannot reveal during ${String(s.biddingStage)}`);
+  }
+  if (s.biddingStage === 'pre-dealer' && s.currentBid?.seat === seat) {
+    return fail('current-bidder-locked', 'current bidder must wait for another player to counter');
+  }
+  if (
+    s.biddingStage === 'pre-dealer' &&
+    s.bidWindowEndsAt !== null &&
+    now >= s.bidWindowEndsAt
+  ) {
+    return fail('bid-window-closed', 'pre-kitty bid window has closed');
+  }
+  const cards = resolveCards(visibleBidHand(s, seat), cardIds);
+  if (cards === null) return fail('cards-not-in-hand', 'reveal cards must come from hand');
+  const bid = detectBid(cards, s.level, seat);
+  if (bid === null) return fail('invalid-bid', 'cards do not form a valid bid');
+  if (!bidBeats(bid, s.currentBid)) return fail('invalid-bid', 'bid does not beat current bid');
+  return {
+    ok: true,
+    state: {
+      ...s,
+      currentBid: bid,
+      bidHistory: [...s.bidHistory, bid],
+      dealerSeat: s.isFirstRound ? seat : s.dealerSeat,
+      trump: { ...s.trump, trumpSuit: trumpSuitOfBid(bid) },
+      passStreak: 0,
+      biddingTurn: null,
+      bidWindowEndsAt:
+        s.biddingStage === 'pre-dealer' ? now + s.bidWindowDurationMs : s.bidWindowEndsAt,
+    },
+  };
+}
+
+function seatsAfter(seat: number, excluded: Set<number>): number[] {
+  const seats: number[] = [];
+  for (let offset = 1; offset <= SEAT_COUNT; offset++) {
+    const candidate = (seat + offset) % SEAT_COUNT;
+    if (!excluded.has(candidate)) seats.push(candidate);
+  }
+  return seats;
+}
+
+function startPlaying(s: RoundState): RoundState {
+  return {
+    ...s,
+    phase: 'playing',
+    biddingStage: null,
+    biddingTurn: null,
+    bidWindowEndsAt: null,
+    postBuryBidQueue: [],
+    buryingSeat: null,
+    turnSeat: s.dealerSeat,
+  };
+}
+
+function revealPostBury(s: RoundState, seat: number, cardIds: string[]): StepResult {
+  if (s.biddingStage !== 'post-bury') return fail('wrong-phase', 'post-bury counter window is closed');
   if (seat !== s.biddingTurn) return fail('wrong-turn', `not seat ${seat}'s bidding turn`);
   const cards = resolveCards(s.hands[seat], cardIds);
   if (cards === null) return fail('cards-not-in-hand', 'reveal cards must come from hand');
   const bid = detectBid(cards, s.level, seat);
   if (bid === null) return fail('invalid-bid', 'cards do not form a valid bid');
+  if (!isPairBid(bid)) return fail('invalid-bid', 'counter bid must be a pair');
   if (!bidBeats(bid, s.currentBid)) return fail('invalid-bid', 'bid does not beat current bid');
+  // 新亮主者暂时失去继续反主的资格；其余三家（包括庄家和前亮主者）恢复资格。
+  const postBuryBidQueue = seatsAfter(seat, new Set([seat]));
+  const hands = s.hands.map((hand, handSeat) =>
+    handSeat === seat ? [...hand, ...s.kitty] : hand,
+  );
   return {
     ok: true,
     state: {
       ...s,
+      phase: 'burying',
+      hands,
+      kitty: [],
       currentBid: bid,
       bidHistory: [...s.bidHistory, bid],
-      dealerSeat: seat,
       trump: { ...s.trump, trumpSuit: trumpSuitOfBid(bid) },
-      biddingStage: 'pre-dealer',
       passStreak: 0,
-      biddingTurn: (seat + 1) % SEAT_COUNT,
+      postBuryBidQueue,
+      biddingStage: null,
+      biddingTurn: null,
+      bidWindowEndsAt: null,
+      buryingSeat: seat,
     },
   };
 }
 
-function revealPostDealerBid(s: RoundState, seat: number, cardIds: string[]): StepResult {
-  if (seat !== s.dealerSeat) return fail('not-dealer', 'only dealer can counter after taking kitty');
-  const cards = resolveCards(s.hands[seat], cardIds);
-  if (cards === null) return fail('cards-not-in-hand', 'reveal cards must come from hand');
-  const bid = detectBid(cards, s.level, seat);
-  if (bid === null) return fail('invalid-bid', 'cards do not form a valid bid');
-  if (!bidBeats(bid, s.currentBid)) return fail('invalid-bid', 'bid does not beat current bid');
-  return {
-    ok: true,
-    state: {
-      ...s,
-      currentBid: bid,
-      bidHistory: [...s.bidHistory, bid],
-      trump: { ...s.trump, trumpSuit: trumpSuitOfBid(bid) },
-      biddingStage: 'post-dealer',
-      turnSeat: seat,
-    },
-  };
-}
-
-export function applyReveal(s: RoundState, seat: number, cardIds: string[]): StepResult {
-  if (s.phase === 'bidding') return revealBid(s, seat, cardIds);
-  if (s.phase === 'burying' && s.biddingStage === 'post-dealer') {
-    return revealPostDealerBid(s, seat, cardIds);
-  }
+export function applyReveal(
+  s: RoundState,
+  seat: number,
+  cardIds: string[],
+  now: number = Date.now(),
+): StepResult {
+  if (s.phase === 'bidding' && s.biddingStage === 'post-bury') return revealPostBury(s, seat, cardIds);
+  if (s.phase === 'bidding') return revealBeforeKitty(s, seat, cardIds, now);
   return fail('wrong-phase', `cannot reveal in ${s.phase}`);
+}
+
+// 摸底前窗口由服务端统一计时关闭；首局无人亮主时由房间层废局重发。
+export function closePreKittyBidWindow(s: RoundState): CloseBidWindowResult {
+  if (s.phase !== 'bidding' || s.biddingStage !== 'pre-dealer') {
+    return { ok: false, error: { code: 'wrong-phase', message: 'pre-kitty bid window is not open' } };
+  }
+  if (s.isFirstRound && s.currentBid === null) return { ok: true, action: 'redeal' };
+  return { ok: true, action: 'take-kitty', state: takeKitty(s) };
 }
 
 export function applyPass(s: RoundState, seat: number): StepResult {
   if (s.phase !== 'bidding') return fail('wrong-phase', `cannot pass in ${s.phase}`);
+  if (s.biddingStage === 'dealing') return fail('deal-in-progress', 'cannot pass while cards are being dealt');
+  if (s.biddingStage !== 'post-bury') {
+    return fail('pass-not-required', 'pre-kitty bidding uses a shared timed window');
+  }
   if (seat !== s.biddingTurn) return fail('wrong-turn', `not seat ${seat}'s bidding turn`);
-  const passStreak = s.passStreak + 1;
-  const next: RoundState = { ...s, passStreak, biddingStage: 'pre-dealer', biddingTurn: (seat + 1) % SEAT_COUNT };
-  const done =
-    (s.currentBid !== null && passStreak >= SEAT_COUNT - 1) ||
-    (s.currentBid === null && passStreak >= SEAT_COUNT);
-  return { ok: true, state: done ? finishBidding(next) : next };
+
+  const postBuryBidQueue = s.postBuryBidQueue.slice(1);
+  if (postBuryBidQueue.length === 0) return { ok: true, state: startPlaying(s) };
+  return {
+    ok: true,
+    state: { ...s, postBuryBidQueue, biddingTurn: postBuryBidQueue[0] },
+  };
 }
 
 export function applyBury(s: RoundState, seat: number, cardIds: string[]): StepResult {
   if (s.phase !== 'burying') return fail('wrong-phase', `cannot bury in ${s.phase}`);
-  if (seat !== s.dealerSeat) return fail('not-dealer', 'only dealer can bury');
+  if (seat !== s.buryingSeat) return fail('not-burying-player', 'only the current kitty holder can bury');
   if (cardIds.length !== KITTY_SIZE) return fail('bad-bury-count', `must bury ${KITTY_SIZE} cards`);
   const cards = resolveCards(s.hands[seat], cardIds);
   if (cards === null) return fail('cards-not-in-hand', 'bury cards must come from hand');
   const buried = new Set(cardIds);
   const hands = s.hands.map((h, i) => (i === seat ? h.filter((card) => !buried.has(card.id)) : h));
+  const isInitialBury = s.postBuryBidQueue.length === 0;
+  const initiallyLocked = new Set<number>([s.dealerSeat]);
+  if (s.currentBid !== null) initiallyLocked.add(s.currentBid.seat);
+  const anchor = s.currentBid?.seat ?? s.dealerSeat;
+  const postBuryBidQueue =
+    !s.chaodiEnabled || s.currentBid === null
+      ? []
+      : isInitialBury
+        ? seatsAfter(anchor, initiallyLocked)
+        : s.postBuryBidQueue;
   return {
     ok: true,
-    state: { ...s, phase: 'playing', hands, kitty: cards, biddingStage: null, turnSeat: s.dealerSeat },
+    state: postBuryBidQueue.length === 0
+      ? startPlaying({ ...s, hands, kitty: cards, lastBuryingSeat: seat })
+      : {
+          ...s,
+          phase: 'bidding',
+          hands,
+          kitty: cards,
+          lastBuryingSeat: seat,
+          biddingStage: 'post-bury',
+          biddingTurn: postBuryBidQueue[0],
+          postBuryBidQueue,
+          buryingSeat: null,
+          passStreak: 0,
+        },
   };
 }
 
@@ -247,6 +398,7 @@ export function applyPlay(s: RoundState, seat: number, cardIds: string[]): StepR
     hands,
     currentTrick: [],
     lastTrick: currentTrick,
+    trickHistory: [...s.trickHistory, currentTrick],
     lastTrickWinnerSeat: winner,
     throwEvents,
     throwPenaltyPoints,
@@ -263,7 +415,7 @@ export function applyPlay(s: RoundState, seat: number, cardIds: string[]): StepR
     defenderTrickPoints,
     kitty: s.kitty,
     lastTrickWinnerSeat: winner,
-    lastTrickCardsPerPlayer: currentTrick[0].cards.length,
+    lastTrickCardsPerPlayer: kittyMultiplierCards(currentTrick[0].combo!),
     teamLevels: s.teamLevels,
     throwPenaltyPoints,
   });

@@ -29,6 +29,7 @@ export type RoomCreatePayload = {
   nickname: string;
   password?: string;
   playerId: string;
+  chaodiEnabled?: boolean;
 };
 
 export type RoomJoinPayload = {
@@ -59,5 +60,6 @@ export type RoomListItem = {
   code: string;
   playerCount: number;
   hasPassword: boolean;
+  chaodiEnabled: boolean;
   phase: string;
 };

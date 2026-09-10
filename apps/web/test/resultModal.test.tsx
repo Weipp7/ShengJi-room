@@ -11,6 +11,7 @@ function c(suit: 'S' | 'H' | 'D' | 'C', rank: number, copy: number): Card {
 function mkView(partial: Partial<RoomStateView>): RoomStateView {
   return {
     roomCode: 'TEST1',
+    chaodiEnabled: false,
     phase: 'scoring',
     seats: ['你', '右家', '对家', '左家'].map((nickname, seat) => ({
       seat,
@@ -25,10 +26,14 @@ function mkView(partial: Partial<RoomStateView>): RoomStateView {
     yourHand: [],
     trump: { trumpSuit: 'S', level: 2 },
     dealerSeat: 0,
+    buryingSeat: null,
     currentBid: null,
     bidHistory: [],
+    isFirstRound: false,
+    redealCount: 0,
     biddingStage: null,
     biddingTurn: null,
+    bidWindowEndsAt: null,
     turnSeat: null,
     currentTrick: [],
     lastTrick: [],
@@ -124,7 +129,9 @@ describe('ResultModal', () => {
       }),
     );
 
-    expect(html).toContain('庄家小胜 +1级');
+    expect(html).toContain('庄家方升 1 级');
+    expect(html).not.toContain('大光');
+    expect(html).not.toContain('小光');
     expect(html).toContain('闲家基础得分');
     expect(html).toContain('庄家守住底牌 (无扣底)');
     expect(html).toContain('红队 2 → 3');
@@ -157,8 +164,62 @@ describe('ResultModal', () => {
       }),
     );
 
-    expect(html).toContain('换庄 (不升级)');
+    expect(html).toContain('闲家上台');
     expect(html).toContain('闲家扣底成功，但底牌无分');
+  });
+
+  it('shows the real negative score and labels it as a grand shutout', () => {
+    const html = renderToStaticMarkup(
+      React.createElement(ResultModal, {
+        view: mkView({
+          defenderPoints: -40,
+          roundResult: {
+            defenderPoints: -40,
+            baseDefenderPoints: 20,
+            throwPenaltyDelta: -60,
+            throwPenaltyPoints: [60, 0],
+            kittyCards: [],
+            kittyBonus: 0,
+            winnerTeam: 0,
+            levelDelta: 3,
+            nextDealerSeat: 2,
+            nextLevels: [5, 2],
+          },
+        }),
+        onNextRound: () => {},
+        onDismiss: () => {},
+      }),
+    );
+
+    expect(html).toContain('大光，庄家方升 3 级');
+    expect(html).toContain('-40');
+  });
+
+  it('labels a positive score below 40 as a small shutout', () => {
+    const html = renderToStaticMarkup(
+      React.createElement(ResultModal, {
+        view: mkView({
+          defenderPoints: 20,
+          roundResult: {
+            defenderPoints: 20,
+            baseDefenderPoints: 20,
+            throwPenaltyDelta: 0,
+            throwPenaltyPoints: [0, 0],
+            kittyCards: [],
+            kittyBonus: 0,
+            winnerTeam: 0,
+            levelDelta: 2,
+            nextDealerSeat: 2,
+            nextLevels: [4, 2],
+          },
+        }),
+        onNextRound: () => {},
+        onDismiss: () => {},
+      }),
+    );
+
+    expect(html).toContain('小光，庄家方升 2 级');
+    expect(html).not.toContain('大光');
   });
 
   it('shows auto-continue countdown for quick robot rounds', () => {

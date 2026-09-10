@@ -11,6 +11,7 @@ const NICKNAMES = ['阿明', '机器人2', '机器人3', '机器人4'];
 function mkView(partial: Partial<RoomStateView>): RoomStateView {
   return {
     roomCode: 'TEST1',
+    chaodiEnabled: false,
     phase: 'bidding',
     seats: NICKNAMES.map((nickname, seat) => ({
       seat,
@@ -25,10 +26,14 @@ function mkView(partial: Partial<RoomStateView>): RoomStateView {
     yourHand: [],
     trump: { trumpSuit: null, level: 2 },
     dealerSeat: null,
+    buryingSeat: null,
     currentBid: null,
     bidHistory: [],
+    isFirstRound: false,
+    redealCount: 0,
     biddingStage: 'pre-dealer',
     biddingTurn: 0,
+    bidWindowEndsAt: null,
     turnSeat: null,
     currentTrick: [],
     lastTrick: [],
@@ -49,18 +54,14 @@ const pairBid: Bid = {
   cards: [c('H', 2, 0), c('H', 2, 1)],
 };
 
-const tripleBid: Bid = {
-  seat: 1,
-  kind: 'suit-multiple',
-  suit: 'S',
-  cards: [c('S', 2, 0), c('S', 2, 1), c('S', 2, 2)],
-};
-
-const bigJokerSingle: Bid = {
+const bigJokerPair: Bid = {
   seat: 0,
-  kind: 'big-joker-single',
+  kind: 'big-joker-pair',
   suit: null,
-  cards: [{ id: 'big-0', kind: 'joker', joker: 'big' }],
+  cards: [
+    { id: 'big-0', kind: 'joker', joker: 'big' },
+    { id: 'big-1', kind: 'joker', joker: 'big' },
+  ],
 };
 
 describe('describeContract', () => {
@@ -101,7 +102,7 @@ describe('describeContract', () => {
         biddingStage: 'pre-dealer',
       }),
     );
-    expect(summary.detail).toContain('庄前反牌中');
+    expect(summary.detail).toContain('摸底前 5 秒自由反主');
   });
 
   it('persists the winning bid through playing', () => {
@@ -141,43 +142,43 @@ describe('describeContract', () => {
     expect(summary.detail).toContain('主 ♥');
   });
 
-  it('describes arbitrary-count suit bids and single joker bids', () => {
-    const tripleSummary = describeContract(
-      mkView({
-        currentBid: tripleBid,
-        trump: { trumpSuit: 'S', level: 2 },
-        dealerSeat: 1,
-      }),
-    );
-    expect(tripleSummary.detail).toContain('机器人2 亮主 ♠2 3张');
-
+  it('describes a joker-pair no-trump bid', () => {
     const jokerSummary = describeContract(
       mkView({
-        currentBid: bigJokerSingle,
+        currentBid: bigJokerPair,
         trump: { trumpSuit: null, level: 2 },
         dealerSeat: 0,
       }),
     );
-    expect(jokerSummary.detail).toContain('你 亮主 大王单张');
+    expect(jokerSummary.detail).toContain('你 亮主 大王一对');
     expect(jokerSummary.detail).toContain('本局无主');
   });
 
-  it('marks the post-dealer counter window before burying', () => {
+  it('marks the counter window after burying', () => {
     const summary = describeContract(
       mkView({
-        phase: 'burying',
+        phase: 'bidding',
         currentBid: pairBid,
         bidHistory: [pairBid],
         trump: { trumpSuit: 'H', level: 2 },
         dealerSeat: 2,
-        biddingStage: 'post-dealer',
+        biddingStage: 'post-bury',
+        biddingTurn: 0,
       }),
     );
-    expect(summary.title).toContain('庄后反牌');
-    expect(summary.detail).toContain('庄后反牌中');
+    expect(summary.title).toContain('埋底后反主');
+    expect(summary.detail).toContain('埋底后反主');
     expect(summary.facts).toEqual(
-      expect.arrayContaining([{ label: '反牌窗口', value: '庄后反牌中', tone: 'stage' }]),
+      expect.arrayContaining([{ label: '反牌窗口', value: '埋底后反主', tone: 'stage' }]),
     );
+  });
+
+  it('calls the first opening bid of the first round 抢庄', () => {
+    const summary = describeContract(
+      mkView({ isFirstRound: true, currentBid: pairBid, dealerSeat: 2 }),
+    );
+    expect(summary.title).toContain('机器人3 抢庄');
+    expect(summary.detail).toContain('机器人3 抢庄');
   });
 
   it('describes no-bid fallback dealer and no-trump contract', () => {
@@ -222,5 +223,19 @@ describe('describeContract', () => {
       { label: '庄', value: '机器人3', tone: 'dealer' },
       { label: '闲家', value: '45/80', tone: 'score' },
     ]);
+  });
+
+  it('shows the real negative defender score in the table facts', () => {
+    const summary = describeContract(
+      mkView({
+        phase: 'playing',
+        currentBid: pairBid,
+        bidHistory: [pairBid],
+        dealerSeat: 0,
+        defenderPoints: -40,
+      }),
+    );
+
+    expect(summary.facts).toContainEqual({ label: '闲家', value: '-40/80', tone: 'score' });
   });
 });
