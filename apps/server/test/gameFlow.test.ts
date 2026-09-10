@@ -1,11 +1,13 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import type { AddressInfo } from 'node:net';
 import { io as clientIo, type Socket as ClientSocket } from 'socket.io-client';
-import type { ChatMessagePayload, RoomStateView } from '@shengji/shared';
+import type { ChatMessagePayload, Combo, RoomStateView, TrickPlayView } from '@shengji/shared';
 import { C2S, S2C } from '@shengji/shared';
-import { countPoints, createRound, detectCombo } from '@shengji/game';
+import { countPoints, createRound, detectCombo, matchThrowCombo } from '@shengji/game';
 import { decideBury, decidePlay } from '@shengji/bot';
 import { createApp } from '../src/app';
+import { closeTimedBidWindow, startGame } from '../src/gameFlow';
+import { RoomManager } from '../src/rooms';
 
 let ctx: ReturnType<typeof createApp>;
 let port = 0;
@@ -13,7 +15,11 @@ const clients: ClientSocket[] = [];
 
 beforeAll(async () => {
   // 机器人零延迟，测试内快速跑完整局
-  ctx = createApp(undefined, { botDelayMs: () => 0 });
+  ctx = createApp(undefined, {
+    botDelayMs: () => 0,
+    dealDelayMs: () => 0,
+    bidWindowMs: 20,
+  });
   await new Promise<void>((resolve) => ctx.httpServer.listen(0, resolve));
   port = (ctx.httpServer.address() as AddressInfo).port;
 });
@@ -86,31 +92,67 @@ async function createFourHumanRoom(prefix: string): Promise<{
 }
 
 // 人类玩家自动机：轮到自己就用 bot 决策回发，模拟真实客户端
+function visibleLeadCombo(play: TrickPlayView | undefined, trump: NonNullable<RoomStateView['trump']>): Combo | null {
+  if (!play) return null;
+  if (!play.throwEvent?.success) return detectCombo(play.cards, trump);
+  const components = play.throwEvent.components;
+  const strongestType = components.some((component) => component.type === 'tractor')
+    ? 'tractor'
+    : components.some((component) => component.type === 'pair')
+      ? 'pair'
+      : 'single';
+  return {
+    type: 'throw',
+    cards: play.cards,
+    suit: components[0].suit,
+    strength: Math.max(
+      ...components
+        .filter((component) => component.type === strongestType)
+        .map((component) => component.strength),
+    ),
+    components,
+  };
+}
+
 function autoPlay(socket: ClientSocket): void {
   let lastKey = '';
   socket.on(S2C.RoomState, (s: RoomStateView) => {
     if (s.yourSeat === null || s.trump === null) return;
     // currentBid 参与 key：有人亮主后叫主轮回到自己时需再次表态
-    const key = `${s.phase}:${s.biddingTurn}:${s.turnSeat}:${s.yourHand.length}:${s.currentTrick.length}:${JSON.stringify(s.currentBid)}`;
+    const key = `${s.phase}:${s.biddingStage}:${s.biddingTurn}:${s.turnSeat}:${s.yourHand.length}:${s.currentTrick.length}:${JSON.stringify(s.currentBid)}`;
     if (key === lastKey) return;
     if (s.phase === 'bidding' && s.biddingTurn === s.yourSeat) {
       lastKey = key;
       socket.emit(C2S.BidPass, {});
-    } else if (s.phase === 'burying' && s.dealerSeat === s.yourSeat) {
+    } else if (s.phase === 'burying' && s.buryingSeat === s.yourSeat) {
       lastKey = key;
-      socket.emit(C2S.KittyBury, { cardIds: decideBury(s.yourHand, s.trump) });
+      socket.emit(C2S.KittyBury, {
+        cardIds: decideBury({
+          hand: s.yourHand,
+          trump: s.trump,
+          seat: s.yourSeat,
+          dealerSeat: s.dealerSeat!,
+          currentBid: s.currentBid,
+          bidHistory: s.bidHistory,
+        }),
+      });
     } else if (s.phase === 'playing' && s.turnSeat === s.yourSeat) {
       lastKey = key;
       const trump = s.trump;
-      const trick = s.currentTrick.map((p) => ({
+      const leadCombo = visibleLeadCombo(s.currentTrick[0], trump);
+      const trick = s.currentTrick.map((p, index) => ({
         seat: p.seat,
         cards: p.cards,
-        combo: detectCombo(p.cards, trump),
+        combo: index === 0
+          ? leadCombo
+          : leadCombo?.type === 'throw'
+            ? matchThrowCombo(p.cards, leadCombo, trump)
+            : detectCombo(p.cards, trump),
       }));
       const cardIds = decidePlay({
         hand: s.yourHand,
         trump,
-        leadCombo: trick.length > 0 ? trick[0].combo : null,
+        leadCombo,
         currentTrick: trick,
         seat: s.yourSeat,
         trickPointsSoFar: countPoints(s.currentTrick.flatMap((p) => p.cards)),
@@ -121,6 +163,33 @@ function autoPlay(socket: ClientSocket): void {
 }
 
 describe('game flow orchestration', () => {
+  it('redeals the first round without advancing the round number when nobody reveals', () => {
+    const manager = new RoomManager(() => 0.1);
+    const room = manager.createRoom('redeal-host', 'Host', null, false);
+    for (const seat of [1, 2, 3]) manager.addBot(room, seat);
+    expect(startGame(room, () => 0.1, 20).ok).toBe(true);
+    room.round = {
+      ...room.round!,
+      biddingStage: 'pre-dealer',
+      dealtCount: 25,
+      bidWindowEndsAt: 0,
+      currentBid: null,
+      bidHistory: [],
+    };
+
+    expect(closeTimedBidWindow(room, () => 0.2)).toMatchObject({
+      ok: true,
+      redealt: true,
+    });
+    expect(room.roundNumber).toBe(1);
+    expect(room.round).toMatchObject({
+      isFirstRound: true,
+      redealCount: 1,
+      biddingStage: 'dealing',
+      dealtCount: 0,
+    });
+  });
+
   it(
     '1 human + 3 bots plays a full round to scoring automatically',
     async () => {
@@ -139,7 +208,7 @@ describe('game flow orchestration', () => {
       host.emit(C2S.GameStart, {});
       const scoring = await scoringPromise;
       const result = scoring.roundResult!;
-      expect(result.defenderPoints).toBeGreaterThanOrEqual(0);
+      expect(Number.isFinite(result.defenderPoints)).toBe(true);
       expect(result.nextLevels).toHaveLength(2);
       expect(scoring.roomCode).toBe(created.roomCode);
 
@@ -158,7 +227,7 @@ describe('game flow orchestration', () => {
     30_000,
   );
 
-  it('wrong-turn and wrong-phase actions rejected', async () => {
+  it('rejects pass during the shared pre-kitty window and rejects wrong-phase actions', async () => {
     const host = await connect();
     host.emit(C2S.RoomCreate, { nickname: 'H', playerId: 'gf-h2' });
     const created = await once<RoomStateView>(host, S2C.RoomState);
@@ -176,14 +245,17 @@ describe('game flow orchestration', () => {
     await waitState(guest, (s) => s.yourSeat === 1);
     for (const seat of [2, 3]) host.emit(C2S.BotAdd, { seat });
     await waitState(host, (s) => s.seats.filter((x) => x.isBot).length === 2);
-    const started = waitState(guest, (s) => s.phase === 'bidding');
+    const started = waitState(
+      guest,
+      (s) => s.phase === 'bidding' && s.biddingStage === 'pre-dealer' && s.biddingTurn === null,
+    );
     host.emit(C2S.GameStart, {});
     await started;
 
-    // 叫主轮在 seat 0（host），guest 抢过 → wrong-turn
+    // 摸底前是共享倒计时，不接受任何玩家用“过”提前收口。
     guest.emit(C2S.BidPass, {});
     const e2 = await once<{ code: string }>(guest, S2C.GameError);
-    expect(e2.code).toBe('wrong-turn');
+    expect(e2.code).toBe('pass-not-required');
 
     // bidding 阶段埋底 → wrong-phase
     guest.emit(C2S.KittyBury, { cardIds: [] });
@@ -193,22 +265,17 @@ describe('game flow orchestration', () => {
     guest.close();
   });
 
-  it('duplicate pass requests only advance the bidding turn once', async () => {
-    const { code, host, all } = await createFourHumanRoom('dup-pass');
-    const started = waitState(host, (s) => s.phase === 'bidding' && s.biddingTurn === 0);
-    host.emit(C2S.GameStart, {});
-    await started;
-
-    const nextState = waitState(host, (s) => s.phase === 'bidding' && s.biddingTurn === 1);
-    const staleError = once<{ code: string }>(host, S2C.GameError);
-    host.emit(C2S.BidPass, {});
-    host.emit(C2S.BidPass, {});
-
-    const [state, error] = await Promise.all([nextState, staleError]);
-    expect(error.code).toBe('wrong-turn');
-    expect(state.biddingTurn).toBe(1);
-    expect(ctx.manager.rooms.get(code)?.round?.biddingTurn).toBe(1);
-    for (const socket of all) socket.close();
+  it('projects the immutable chaodi option chosen when the room is created', async () => {
+    const host = await connect();
+    host.emit(C2S.RoomCreate, {
+      nickname: 'rule-host',
+      playerId: 'rule-host',
+      chaodiEnabled: true,
+    });
+    const state = await once<RoomStateView>(host, S2C.RoomState);
+    expect(state.chaodiEnabled).toBe(true);
+    expect(ctx.manager.rooms.get(state.roomCode)?.chaodiEnabled).toBe(true);
+    host.close();
   });
 
   it('duplicate play requests only remove the played card once', async () => {

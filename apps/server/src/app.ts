@@ -32,15 +32,20 @@ export function projectRoomState(room: Room, playerId: string): RoomStateView {
   const effectiveDefenderPoints =
     round == null
       ? 0
-      : Math.max(
-          0,
-          round.defenderTrickPoints +
-            round.throwPenaltyPoints[(1 - teamOfSeat(round.dealerSeat)) as 0 | 1] -
-            round.throwPenaltyPoints[teamOfSeat(round.dealerSeat)],
-        );
+      : round.defenderTrickPoints +
+        round.throwPenaltyPoints[(1 - teamOfSeat(round.dealerSeat)) as 0 | 1] -
+        round.throwPenaltyPoints[teamOfSeat(round.dealerSeat)];
   const defenderPoints = round?.phase === 'scoring' && round.result ? round.result.defenderPoints : effectiveDefenderPoints;
+  const visibleDealerSeat =
+    round?.isFirstRound === true &&
+    round.phase === 'bidding' &&
+    round.biddingStage !== 'post-bury' &&
+    round.currentBid === null
+      ? null
+      : round?.dealerSeat ?? null;
   return {
     roomCode: room.code,
+    chaodiEnabled: room.chaodiEnabled,
     phase: room.phase,
     seats: room.seats.map((s, i) => ({
       seat: i,
@@ -48,17 +53,33 @@ export function projectRoomState(room: Room, playerId: string): RoomStateView {
       isBot: s.bot !== null,
       connected: s.bot !== null || (s.player?.connected ?? false),
       isHost: s.player?.playerId === room.hostPlayerId,
-      handCount: round ? round.hands[i].length : 0,
+      handCount: round
+        ? round.biddingStage === 'dealing'
+          ? round.dealtCount
+          : round.hands[i].length
+        : 0,
     })),
     hostSeat: hostSeat >= 0 ? hostSeat : null,
     yourSeat: yourSeat >= 0 ? yourSeat : null,
-    yourHand: round && yourSeat >= 0 ? sortHand(round.hands[yourSeat], round.trump) : [],
+    yourHand:
+      round && yourSeat >= 0
+        ? sortHand(
+            round.biddingStage === 'dealing'
+              ? round.hands[yourSeat].slice(0, round.dealtCount)
+              : round.hands[yourSeat],
+            round.trump,
+          )
+        : [],
     trump: round?.trump ?? null,
-    dealerSeat: round?.dealerSeat ?? null,
+    dealerSeat: visibleDealerSeat,
     currentBid: round?.currentBid ?? null,
     bidHistory: round?.bidHistory ?? [],
     biddingStage: round?.biddingStage ?? null,
     biddingTurn: round && round.phase === 'bidding' ? round.biddingTurn : null,
+    bidWindowEndsAt: round?.bidWindowEndsAt ?? null,
+    isFirstRound: round?.isFirstRound ?? false,
+    redealCount: round?.redealCount ?? 0,
+    buryingSeat: round?.phase === 'burying' ? round.buryingSeat : null,
     turnSeat: round && round.phase === 'playing' ? round.turnSeat : null,
     currentTrick: round?.currentTrick.map((p) => ({ seat: p.seat, cards: p.cards, throwEvent: p.throwEvent })) ?? [],
     lastTrick: round?.lastTrick.map((p) => ({ seat: p.seat, cards: p.cards, throwEvent: p.throwEvent })) ?? [],
@@ -84,6 +105,8 @@ export type AppContext = {
 export type AppOptions = {
   // settling=true 表示机器人正要领出新一墩（客户端在驻留展示上一墩）
   botDelayMs?: (settling: boolean) => number;
+  dealDelayMs?: () => number;
+  bidWindowMs?: number;
   rng?: Rng;
 };
 
@@ -147,6 +170,8 @@ export function createApp(config: ServerConfig = loadConfig(), opts: AppOptions 
     };
 
     const runBots = (room: Room): void => {
+      // 摸底前每次合法亮主/反主都需要重置共享倒计时。
+      cancelBots(room.code);
       scheduleBots(
         room,
         () => {
@@ -155,6 +180,8 @@ export function createApp(config: ServerConfig = loadConfig(), opts: AppOptions 
           broadcastRoom(room);
         },
         opts.botDelayMs,
+        opts.dealDelayMs,
+        opts.rng,
       );
     };
 
@@ -200,6 +227,7 @@ export function createApp(config: ServerConfig = loadConfig(), opts: AppOptions 
         payload.playerId,
         payload.nickname,
         payload.password?.trim() ? payload.password : null,
+        payload.chaodiEnabled === true,
       );
       bind(room, payload.playerId);
       broadcastRoom(room);
@@ -268,7 +296,7 @@ export function createApp(config: ServerConfig = loadConfig(), opts: AppOptions 
       const playerId = socket.data.playerId as string | undefined;
       if (!room || !playerId) return sendError('not-in-room', 'join a room first');
       if (playerId !== room.hostPlayerId) return sendError('not-host', 'only host can start');
-      const res = startGame(room, opts.rng);
+      const res = startGame(room, opts.rng, opts.bidWindowMs);
       if (!res.ok) return sendError(res.code ?? 'start-error', 'cannot start game');
       manager.touch(room);
       broadcastRoom(room);
@@ -288,7 +316,7 @@ export function createApp(config: ServerConfig = loadConfig(), opts: AppOptions 
       const seat = room.seats.findIndex((s) => s.player?.playerId === playerId);
       if (seat < 0) return sendError('not-seated', 'take a seat first');
       if (room.round?.phase !== 'scoring') return sendError('wrong-phase', 'round not finished');
-      advanceToNextRound(room, opts.rng);
+      advanceToNextRound(room, opts.rng, opts.bidWindowMs);
       manager.touch(room);
       broadcastRoom(room);
       runBots(room);

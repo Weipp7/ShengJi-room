@@ -1,19 +1,27 @@
-import { describe, it, expect } from 'vitest';
-import { detectBid, bidBeats, trumpSuitOfBid, availableBids } from '../src/bidding';
+import { describe, expect, it } from 'vitest';
+import {
+  availableBids,
+  bidBeats,
+  detectBid,
+  pairBidStrength,
+  trumpSuitOfBid,
+} from '../src/bidding';
 import { c, joker } from './helpers';
 
 describe('detectBid', () => {
-  it('single level card is a valid bid', () => {
-    const bid = detectBid([c('S', 2, 0)], 2, 1);
-    expect(bid).toMatchObject({ seat: 1, kind: 'suit-single', suit: 'S' });
+  it('accepts one or two identical suit level cards', () => {
+    expect(detectBid([c('S', 2, 0)], 2, 1)).toMatchObject({
+      seat: 1,
+      kind: 'suit-single',
+      suit: 'S',
+    });
+    expect(detectBid([c('D', 2, 0), c('D', 2, 1)], 2, 0)).toMatchObject({
+      kind: 'suit-pair',
+      suit: 'D',
+    });
   });
 
-  it('pair of level cards is suit-pair', () => {
-    const bid = detectBid([c('D', 2, 0), c('D', 2, 1)], 2, 0);
-    expect(bid).toMatchObject({ kind: 'suit-pair', suit: 'D' });
-  });
-
-  it('joker pairs detected; suit is null (no-trump)', () => {
+  it('accepts joker pairs as no-trump bids', () => {
     expect(detectBid([joker('small', 0), joker('small', 1)], 2, 0)).toMatchObject({
       kind: 'small-joker-pair',
       suit: null,
@@ -24,115 +32,97 @@ describe('detectBid', () => {
     });
   });
 
-  it('single jokers are valid no-trump bids', () => {
-    expect(detectBid([joker('small', 0)], 2, 0)).toMatchObject({
-      kind: 'small-joker-single',
-      suit: null,
-    });
-    expect(detectBid([joker('big', 0)], 2, 0)).toMatchObject({
-      kind: 'big-joker-single',
-      suit: null,
-    });
-  });
-
-  it('three or more matching level cards are valid suit bids', () => {
-    const bid = detectBid([c('S', 2, 0), c('S', 2, 1), c('S', 2, 2)], 2, 1);
-    expect(bid).toMatchObject({ seat: 1, kind: 'suit-multiple', suit: 'S' });
-    expect(bid?.cards).toHaveLength(3);
-  });
-
-  it('non-level card is not a bid', () => {
-    expect(detectBid([c('S', 5, 0)], 2, 0)).toBeNull();
+  it('rejects single jokers, three-card declarations and mixed cards', () => {
+    expect(detectBid([joker('small', 0)], 2, 0)).toBeNull();
+    expect(detectBid([joker('big', 0)], 2, 0)).toBeNull();
+    expect(detectBid([c('S', 2, 0), c('S', 2, 1), c('S', 2, 2)], 2, 0)).toBeNull();
     expect(detectBid([c('S', 2, 0), c('D', 2, 0)], 2, 0)).toBeNull();
     expect(detectBid([joker('small', 0), joker('big', 0)], 2, 0)).toBeNull();
+    expect(detectBid([c('S', 5, 0)], 2, 0)).toBeNull();
   });
 });
 
 describe('bidBeats', () => {
-  const single = detectBid([c('S', 2, 0)], 2, 0)!;
-  const singleD = detectBid([c('D', 2, 0)], 2, 1)!;
-  const pair = detectBid([c('D', 2, 0), c('D', 2, 1)], 2, 1)!;
-  const smallSingle = detectBid([joker('small', 0)], 2, 2)!;
-  const bigSingle = detectBid([joker('big', 0)], 2, 3)!;
-  const smallPair = detectBid([joker('small', 0), joker('small', 1)], 2, 2)!;
-  const bigPair = detectBid([joker('big', 0), joker('big', 1)], 2, 3)!;
-  const triple = detectBid([c('S', 2, 0), c('S', 2, 1), c('S', 2, 2)], 2, 0)!;
+  const singleS = detectBid([c('S', 2, 0)], 2, 0)!;
+  const pairD = detectBid([c('D', 2, 0), c('D', 2, 1)], 2, 0)!;
+  const pairC = detectBid([c('C', 2, 0), c('C', 2, 1)], 2, 1)!;
+  const pairH = detectBid([c('H', 2, 0), c('H', 2, 1)], 2, 2)!;
+  const pairS = detectBid([c('S', 2, 0), c('S', 2, 1)], 2, 3)!;
+  const smallPair = detectBid([joker('small', 0), joker('small', 1)], 2, 0)!;
+  const bigPair = detectBid([joker('big', 0), joker('big', 1)], 2, 1)!;
 
-  it('any bid beats null', () => {
-    expect(bidBeats(single, null)).toBe(true);
+  it('allows any valid opening bid', () => {
+    expect(bidBeats(singleS, null)).toBe(true);
+    expect(bidBeats(pairD, null)).toBe(true);
   });
 
-  it('strength order keeps card count first, then suit < small joker < big joker', () => {
-    expect(bidBeats(smallSingle, single)).toBe(true);
-    expect(bidBeats(bigSingle, smallSingle)).toBe(true);
-    expect(bidBeats(pair, single)).toBe(true);
-    expect(bidBeats(pair, bigSingle)).toBe(true);
-    expect(bidBeats(smallPair, pair)).toBe(true);
-    expect(bidBeats(bigPair, smallPair)).toBe(true);
-    expect(bidBeats(triple, bigPair)).toBe(true);
-    expect(bidBeats(single, pair)).toBe(false);
+  it('allows only a pair to counter a single declaration', () => {
+    expect(bidBeats(pairD, singleS)).toBe(true);
+    expect(bidBeats(detectBid([c('H', 2, 0)], 2, 1)!, singleS)).toBe(false);
   });
 
-  it('same-strength different suit cannot overcall', () => {
-    expect(bidBeats(singleD, single)).toBe(false);
-    expect(bidBeats(smallPair, smallPair)).toBe(false);
+  it('uses big joker > small joker > S > H > C > D for pair counters', () => {
+    const ordered = [pairD, pairC, pairH, pairS, smallPair, bigPair];
+    expect(ordered.map(pairBidStrength)).toEqual([1, 2, 3, 4, 5, 6]);
+    for (let i = 1; i < ordered.length; i++) {
+      expect(bidBeats(ordered[i], ordered[i - 1])).toBe(true);
+      expect(bidBeats(ordered[i - 1], ordered[i])).toBe(false);
+    }
   });
-});
 
-describe('trumpSuitOfBid', () => {
-  it('suit bids give trump suit; joker pairs give null (no-trump)', () => {
-    expect(trumpSuitOfBid(detectBid([c('H', 2, 0)], 2, 0)!)).toBe('H');
-    expect(trumpSuitOfBid(detectBid([joker('small', 0)], 2, 0)!)).toBeNull();
-    expect(trumpSuitOfBid(detectBid([joker('big', 0), joker('big', 1)], 2, 0)!)).toBeNull();
+  it('rejects equal-strength pair counters', () => {
+    expect(bidBeats(pairH, pairH)).toBe(false);
   });
 });
 
 describe('availableBids', () => {
-  it('lists strongest bid per option: suit pair over single, joker pairs for NT', () => {
+  it('lists opening singles/pairs but never a single joker', () => {
     const hand = [
       c('S', 2, 0),
       c('D', 2, 0),
       c('D', 2, 1),
-      c('H', 5, 0),
+      joker('small', 0),
       joker('big', 0),
       joker('big', 1),
     ];
     const bids = availableBids(hand, 2, null);
-    const byKey = new Map(bids.map((b) => [b.suit ?? 'NT', b]));
-    expect(byKey.get('S')).toMatchObject({ kind: 'suit-single' });
-    expect(byKey.get('D')).toMatchObject({ kind: 'suit-pair' });
-    expect(byKey.get('NT')).toMatchObject({ kind: 'big-joker-pair' });
-    expect(byKey.has('H')).toBe(false); // 无级牌不可叫
-    expect(byKey.get('D')!.cards).toHaveLength(2);
+    expect(bids).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: 'suit-single', suit: 'S' }),
+        expect.objectContaining({ kind: 'suit-pair', suit: 'D' }),
+        expect.objectContaining({ kind: 'big-joker-pair', suit: null }),
+      ]),
+    );
+    expect(bids.some((bid) => bid.kind.startsWith('small-joker'))).toBe(false);
   });
 
-  it('filters bids that cannot beat the current bid', () => {
-    const current = detectBid([c('H', 2, 0), c('H', 2, 1)], 2, 3)!; // 对级牌
-    const hand = [c('S', 2, 0), joker('small', 0), joker('small', 1)];
+  it('filters pair counters by the fixed suit hierarchy', () => {
+    const current = detectBid([c('H', 2, 0), c('H', 2, 1)], 2, 3)!;
+    const hand = [
+      c('D', 2, 0), c('D', 2, 1),
+      c('S', 2, 0), c('S', 2, 1),
+      joker('small', 0), joker('small', 1),
+    ];
     const bids = availableBids(hand, 2, current);
-    // 单张级牌压不过对；小王对可反
+    expect(bids.map((bid) => bid.kind)).toEqual(['suit-pair', 'small-joker-pair']);
+    expect(bids.find((bid) => bid.kind === 'suit-pair')?.suit).toBe('S');
+  });
+
+  it('counterOnly suppresses opening singles even without a current bid', () => {
+    const bids = availableBids(
+      [c('S', 2, 0), c('D', 2, 0), c('D', 2, 1)],
+      2,
+      null,
+      { counterOnly: true },
+    );
     expect(bids).toHaveLength(1);
-    expect(bids[0]).toMatchObject({ kind: 'small-joker-pair', suit: null });
+    expect(bids[0]).toMatchObject({ kind: 'suit-pair', suit: 'D' });
   });
+});
 
-  it('empty when nothing beats current big joker pair', () => {
-    const current = detectBid([joker('big', 0), joker('big', 1)], 2, 0)!;
-    const hand = [c('S', 2, 0), c('S', 2, 1), joker('small', 0), joker('small', 1)];
-    expect(availableBids(hand, 2, current)).toHaveLength(0);
-  });
-
-  it('uses all matching cards for arbitrary-count suit bids', () => {
-    const hand = [c('S', 2, 0), c('S', 2, 1), c('S', 2, 2), c('D', 2, 0)];
-    const bids = availableBids(hand, 2, null);
-    const spades = bids.find((b) => b.suit === 'S');
-    expect(spades).toMatchObject({ kind: 'suit-multiple' });
-    expect(spades?.cards).toHaveLength(3);
-  });
-
-  it('lists a single big joker as a no-trump counter over a single small joker', () => {
-    const current = detectBid([joker('small', 0)], 2, 0)!;
-    const bids = availableBids([joker('big', 0)], 2, current);
-    expect(bids).toHaveLength(1);
-    expect(bids[0]).toMatchObject({ kind: 'big-joker-single', suit: null });
+describe('trumpSuitOfBid', () => {
+  it('uses suit declarations as trump and joker pairs as no-trump', () => {
+    expect(trumpSuitOfBid(detectBid([c('H', 2, 0)], 2, 0)!)).toBe('H');
+    expect(trumpSuitOfBid(detectBid([joker('big', 0), joker('big', 1)], 2, 0)!)).toBeNull();
   });
 });

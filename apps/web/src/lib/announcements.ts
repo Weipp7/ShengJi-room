@@ -42,10 +42,11 @@ function cardFaceText(card: Card): string {
 }
 
 function cardsSummary(cards: Card[]): string {
+  if (cards.length === 1) return `${cardFaceText(cards[0])} 单张`;
   if (cards.length === 2 && cardFaceText(cards[0]) === cardFaceText(cards[1])) {
     return `${cardFaceText(cards[0])} 一对`;
   }
-  return `${cards.length} 张`;
+  return `${cards.length} 张（${cards.map(cardFaceText).join('、')}）`;
 }
 
 function bidAnnouncement(
@@ -54,13 +55,23 @@ function bidAnnouncement(
   previousBid: Bid | null,
   level: number,
   index: number,
+  postBuryCounter: boolean,
 ): Announcement {
   const who = seatName(view, bid.seat);
+  const openingAction = view.isFirstRound ? '抢庄' : '亮主';
+  if (previousBid === null && postBuryCounter) {
+    return {
+      id: `counter-${index}-${bid.seat}-${bid.kind}-${bid.suit ?? 'NT'}`,
+      kind: 'counter',
+      text: `${who} 反主！${bidLabel(bid, level)}，${trumpChangeText(null, bid, level)}`,
+      cards: bid.cards,
+    };
+  }
   return previousBid === null
     ? {
         id: `bid-${index}-${bid.seat}-${bid.kind}-${bid.suit ?? 'NT'}`,
         kind: 'bid',
-        text: `${who} 亮主 ${bidLabel(bid, level)}，${trumpChangeText(null, bid, level)}`,
+        text: `${who} ${openingAction} ${bidLabel(bid, level)}，${trumpChangeText(null, bid, level)}`,
         cards: bid.cards,
       }
     : {
@@ -78,18 +89,14 @@ function throwAnnouncement(view: RoomStateView, event: ThrowEventView, index: nu
     return {
       id: `throw-${index}-${event.id}`,
       kind: 'throw',
-      text: `${prefix}甩牌成功：本墩以 ${event.n} 个对子领出`,
+      text: `${prefix}甩牌成功：${event.attemptedCards.length} 张牌切分为 ${event.components.length} 组牌型`,
       cards: event.attemptedCards,
     };
   }
   return {
     id: `throw-${index}-${event.id}`,
     kind: 'throw',
-    text: `${prefix}甩牌失败：有人可压住其中的 ${cardsSummary(
-      event.challengedCards,
-    )}，本墩实际领出 ${cardsSummary(event.actualCards)}；甩牌惩罚 20 × ${event.n} = ${
-      event.penaltyPoints
-    } 分`,
+    text: `${prefix}甩牌失败，强制出小：${cardsSummary(event.actualCards)}；罚 ${event.penaltyPoints} 分`,
     cards: event.attemptedCards,
   };
 }
@@ -106,33 +113,65 @@ export function deriveAnnouncements(
   const prevHistory = bidHistory(prev);
   const nextHistory = bidHistory(next);
   const prevThrowIds = new Set((prev.throwEvents ?? []).map((event) => event.id));
+  const postBuryCounter =
+    prev.biddingStage === 'post-bury' || next.biddingStage === 'post-bury';
+
+  if ((next.redealCount ?? 0) > (prev.redealCount ?? 0)) {
+    events.push({
+      id: `first-round-redeal-${next.redealCount}`,
+      kind: 'phase',
+      text: '首局无人亮主，本局作废，正在重新发牌',
+      cards: [],
+    });
+  }
 
   if (nextHistory.length > prevHistory.length) {
     for (let i = prevHistory.length; i < nextHistory.length; i++) {
-      events.push(bidAnnouncement(next, nextHistory[i], i > 0 ? nextHistory[i - 1] : null, level, i));
+      events.push(
+        bidAnnouncement(
+          next,
+          nextHistory[i],
+          i > 0 ? nextHistory[i - 1] : null,
+          level,
+          i,
+          postBuryCounter,
+        ),
+      );
     }
   } else if (!sameBid(prev.currentBid, next.currentBid) && next.currentBid !== null) {
     const bid = next.currentBid;
-    events.push(bidAnnouncement(next, bid, prev.currentBid, level, nextHistory.length));
+    events.push(
+      bidAnnouncement(next, bid, prev.currentBid, level, nextHistory.length, postBuryCounter),
+    );
   }
 
   if (prev.phase === 'bidding' && next.phase === 'burying') {
-    const dealer = seatName(next, next.dealerSeat);
-    events.push(
-      next.currentBid !== null
-        ? {
-            id: `dealer-${next.dealerSeat}`,
-            kind: 'phase',
-            text: `${dealer} 坐庄，底牌归庄，埋底中…`,
-            cards: [],
-          }
-        : {
-            id: `dealer-fallback-${next.dealerSeat}`,
-            kind: 'phase',
-            text: `无人亮主，本局打无主，${dealer} 坐庄`,
-            cards: [],
-          },
-    );
+    if (prev.biddingStage === 'post-bury') {
+      const buryer = seatName(next, next.buryingSeat);
+      events.push({
+        id: `counter-rebury-${next.bidHistory.length}-${next.buryingSeat}`,
+        kind: 'phase',
+        text: `${buryer} 反主成功，拿起当前底牌重新埋底；庄家不变`,
+        cards: [],
+      });
+    } else {
+      const dealer = seatName(next, next.dealerSeat);
+      events.push(
+        next.currentBid !== null
+          ? {
+              id: `dealer-${next.dealerSeat}`,
+              kind: 'phase',
+              text: `${dealer} 坐庄，底牌归庄，埋底中…`,
+              cards: [],
+            }
+          : {
+              id: `dealer-fallback-${next.dealerSeat}`,
+              kind: 'phase',
+              text: `无人亮主，本局打无主，${dealer} 坐庄`,
+              cards: [],
+            },
+      );
+    }
   }
 
   if (prev.phase === 'burying' && next.phase === 'playing') {
@@ -140,6 +179,28 @@ export function deriveAnnouncements(
       id: `play-start-${next.dealerSeat}`,
       kind: 'phase',
       text: `埋底完成，${seatName(next, next.dealerSeat)} 先出牌`,
+      cards: [],
+    });
+  }
+
+  if (prev.phase === 'burying' && next.phase === 'bidding' && next.biddingStage === 'post-bury') {
+    events.push({
+      id: `post-bury-${next.dealerSeat}`,
+      kind: 'phase',
+      text: `埋底完成，进入埋底后反主窗口`,
+      cards: [],
+    });
+  }
+
+  if (
+    prev.phase === 'bidding' &&
+    prev.biddingStage === 'post-bury' &&
+    next.phase === 'playing'
+  ) {
+    events.push({
+      id: `play-start-${next.dealerSeat}`,
+      kind: 'phase',
+      text: `反主结束，${seatName(next, next.dealerSeat)} 先出牌`,
       cards: [],
     });
   }

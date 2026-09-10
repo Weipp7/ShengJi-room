@@ -11,6 +11,7 @@ export default function Lobby() {
   const [password, setPassword] = useState('');
   const [joinCode, setJoinCode] = useState('');
   const [joinPw, setJoinPw] = useState('');
+  const [chaodiEnabled, setChaodiEnabled] = useState(false);
   const [rooms, setRooms] = useState<RoomListItem[]>([]);
   const [hint, setHint] = useState<string | null>(null);
 
@@ -45,6 +46,7 @@ export default function Lobby() {
       nickname,
       playerId: getPlayerId(),
       password: quickBots ? undefined : password.trim() || undefined,
+      chaodiEnabled,
     });
   };
 
@@ -82,6 +84,25 @@ export default function Lobby() {
       </header>
 
       {hint && <div className="toast">{hint}</div>}
+
+      <div className="room-rule-control">
+        <div>
+          <strong>炒底</strong>
+          <span className="muted">
+            {chaodiEnabled ? '庄家埋底后逐家询问是否反主拿底' : '庄家埋底后直接开始出牌'}
+          </span>
+        </div>
+        <button
+          type="button"
+          role="switch"
+          aria-label="是否启用炒底"
+          aria-checked={chaodiEnabled}
+          className={`rule-switch ${chaodiEnabled ? 'on' : 'off'}`}
+          onClick={() => setChaodiEnabled((enabled) => !enabled)}
+        >
+          {chaodiEnabled ? 'ON' : 'OFF'}
+        </button>
+      </div>
 
       <div className="lobby-cards">
         <section className="card">
@@ -129,6 +150,9 @@ export default function Lobby() {
               <li key={r.code}>
                 <span className="room-code">{r.code}</span>
                 <span>{r.playerCount}/4 人</span>
+                <span className={`room-rule-badge ${r.chaodiEnabled ? 'on' : ''}`}>
+                  {r.chaodiEnabled ? '炒底' : '不炒底'}
+                </span>
                 <span>{r.hasPassword ? '🔒' : ''}</span>
                 <button onClick={() => joinRoom(r.code, r.hasPassword ? joinPw : '')}>加入</button>
               </li>

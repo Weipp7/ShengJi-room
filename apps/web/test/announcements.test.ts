@@ -15,6 +15,7 @@ const NICKNAMES = ['阿明', '机器人2', '机器人3', '机器人4'];
 function mkView(partial: Partial<RoomStateView>): RoomStateView {
   return {
     roomCode: 'TEST1',
+    chaodiEnabled: false,
     phase: 'bidding',
     seats: NICKNAMES.map((nickname, seat) => ({
       seat,
@@ -29,10 +30,14 @@ function mkView(partial: Partial<RoomStateView>): RoomStateView {
     yourHand: [],
     trump: { trumpSuit: null, level: 2 },
     dealerSeat: null,
+    buryingSeat: null,
     currentBid: null,
     bidHistory: [],
+    isFirstRound: false,
+    redealCount: 0,
     biddingStage: 'pre-dealer',
     biddingTurn: 0,
+    bidWindowEndsAt: null,
     turnSeat: null,
     currentTrick: [],
     lastTrick: [],
@@ -49,25 +54,27 @@ function mkView(partial: Partial<RoomStateView>): RoomStateView {
 const singleBid: Bid = { seat: 1, kind: 'suit-single', suit: 'S', cards: [c('S', 2, 0)] };
 const pairBid: Bid = { seat: 2, kind: 'suit-pair', suit: 'H', cards: [c('H', 2, 0), c('H', 2, 1)] };
 const ntBid: Bid = { seat: 0, kind: 'big-joker-pair', suit: null, cards: [joker('big', 0), joker('big', 1)] };
-const tripleBid: Bid = {
+const smallJokerPair: Bid = {
   seat: 1,
-  kind: 'suit-multiple',
-  suit: 'S',
-  cards: [c('S', 2, 0), c('S', 2, 1), c('S', 2, 2)],
+  kind: 'small-joker-pair',
+  suit: null,
+  cards: [joker('small', 0), joker('small', 1)],
 };
-const smallJokerSingle: Bid = { seat: 1, kind: 'small-joker-single', suit: null, cards: [joker('small', 0)] };
-const bigJokerSingle: Bid = { seat: 0, kind: 'big-joker-single', suit: null, cards: [joker('big', 0)] };
 const failedThrow: ThrowEventView = {
   id: 'throw-0-failure-S5',
   seat: 0,
   attemptedCards: [c('S', 5, 0), c('S', 5, 1), c('S', 8, 0), c('S', 8, 1)],
   actualCards: [c('S', 5, 0), c('S', 5, 1)],
   challengedCards: [c('S', 5, 0), c('S', 5, 1)],
+  components: [
+    { type: 'pair', suit: 'S', strength: 8, cards: [c('S', 8, 0), c('S', 8, 1)] },
+    { type: 'pair', suit: 'S', strength: 5, cards: [c('S', 5, 0), c('S', 5, 1)] },
+  ],
   success: false,
   n: 2,
   penaltyPoints: 40,
   beneficiaryTeam: 1,
-  reason: 'beatable-pair',
+  reason: 'beatable-component',
 };
 const successfulThrow: ThrowEventView = {
   id: 'throw-1-success-S9',
@@ -75,6 +82,10 @@ const successfulThrow: ThrowEventView = {
   attemptedCards: [c('S', 9, 0), c('S', 9, 1), c('S', 12, 0), c('S', 12, 1)],
   actualCards: [c('S', 9, 0), c('S', 9, 1), c('S', 12, 0), c('S', 12, 1)],
   challengedCards: [],
+  components: [
+    { type: 'pair', suit: 'S', strength: 12, cards: [c('S', 12, 0), c('S', 12, 1)] },
+    { type: 'pair', suit: 'S', strength: 9, cards: [c('S', 9, 0), c('S', 9, 1)] },
+  ],
   success: true,
   n: 2,
   penaltyPoints: 0,
@@ -102,6 +113,27 @@ describe('deriveAnnouncements', () => {
     expect(events[0].text).toContain('主从无主改为 ♠');
     expect(events[0].text).toContain('级牌 2 不变');
     expect(events[0].cards).toEqual(singleBid.cards);
+  });
+
+  it('calls the first reveal of the first round 抢庄', () => {
+    const events = deriveAnnouncements(
+      mkView({ isFirstRound: true }),
+      mkView({ isFirstRound: true, currentBid: singleBid }),
+    );
+    expect(events[0].text).toContain('抢庄');
+  });
+
+  it('announces that a first-round no-bid deal was discarded and redealt', () => {
+    const events = deriveAnnouncements(
+      mkView({ isFirstRound: true, redealCount: 0 }),
+      mkView({ isFirstRound: true, biddingStage: 'dealing', redealCount: 1 }),
+    );
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        kind: 'phase',
+        text: '首局无人亮主，本局作废，正在重新发牌',
+      }),
+    );
   });
 
   it('your own reveal says 你', () => {
@@ -153,22 +185,29 @@ describe('deriveAnnouncements', () => {
     expect(events[0].text).toContain('主从 ♥ 改为无主');
   });
 
-  it('multi-card suit reveal announces the exposed card count', () => {
-    const events = deriveAnnouncements(mkView({}), mkView({ currentBid: tripleBid }));
-    expect(events[0].text).toContain('亮主');
-    expect(events[0].text).toContain('♠2 3张');
-    expect(events[0].cards).toEqual(tripleBid.cards);
-  });
-
-  it('single big joker counter announces big joker over small joker', () => {
+  it('big-joker pair counter announces it over a small-joker pair', () => {
     const events = deriveAnnouncements(
-      mkView({ currentBid: smallJokerSingle }),
-      mkView({ currentBid: bigJokerSingle }),
+      mkView({ currentBid: smallJokerPair }),
+      mkView({ currentBid: ntBid }),
     );
     expect(events[0].kind).toBe('counter');
-    expect(events[0].text).toContain('大王单张');
-    expect(events[0].text).toContain('压过 小王单张');
+    expect(events[0].text).toContain('大王一对');
+    expect(events[0].text).toContain('压过 小王一对');
     expect(events[0].text).toContain('主仍是 无主');
+  });
+
+  it('calls the first declaration after burying a counter', () => {
+    const events = deriveAnnouncements(
+      mkView({ phase: 'bidding', biddingStage: 'post-bury' }),
+      mkView({
+        phase: 'bidding',
+        biddingStage: 'post-bury',
+        currentBid: pairBid,
+        bidHistory: [pairBid],
+      }),
+    );
+    expect(events[0].kind).toBe('counter');
+    expect(events[0].text).toContain('反主');
   });
 
   it('derives every reveal/counter from bid history when snapshots skip intermediate states', () => {
@@ -207,6 +246,32 @@ describe('deriveAnnouncements', () => {
     expect(events[0].text).toContain('无主');
   });
 
+  it('post-bury counter announces that the counterer takes the kitty and re-buries', () => {
+    const events = deriveAnnouncements(
+      mkView({
+        phase: 'bidding',
+        biddingStage: 'post-bury',
+        currentBid: singleBid,
+        bidHistory: [singleBid],
+        dealerSeat: 0,
+      }),
+      mkView({
+        phase: 'burying',
+        biddingStage: null,
+        currentBid: pairBid,
+        bidHistory: [singleBid, pairBid],
+        dealerSeat: 0,
+        buryingSeat: 2,
+      }),
+    );
+
+    expect(events.map((event) => event.kind)).toEqual(['counter', 'phase']);
+    expect(events[1].text).toContain('机器人3');
+    expect(events[1].text).toContain('拿起当前底牌重新埋底');
+    expect(events[1].text).toContain('庄家不变');
+    expect(events[1].text).not.toContain('坐庄');
+  });
+
   it('burying -> playing announces dealer leads', () => {
     const events = deriveAnnouncements(
       mkView({ phase: 'burying', currentBid: pairBid, dealerSeat: 2 }),
@@ -226,8 +291,8 @@ describe('deriveAnnouncements', () => {
     expect(events).toHaveLength(1);
     expect(events[0].kind).toBe('throw');
     expect(events[0].text).toContain('你甩牌失败');
-    expect(events[0].text).toContain('本墩实际领出');
-    expect(events[0].text).toContain('20 × 2 = 40');
+    expect(events[0].text).toContain('强制出小');
+    expect(events[0].text).toContain('罚 40 分');
     expect(events[0].cards).toEqual(failedThrow.attemptedCards);
   });
 
@@ -240,7 +305,7 @@ describe('deriveAnnouncements', () => {
     expect(events).toHaveLength(1);
     expect(events[0].kind).toBe('throw');
     expect(events[0].text).toContain('机器人2 甩牌成功');
-    expect(events[0].text).toContain('本墩以 2 个对子领出');
+    expect(events[0].text).toContain('4 张牌切分为 2 组牌型');
   });
 
   it('unrelated phase changes emit nothing', () => {

@@ -1,10 +1,17 @@
 import { describe, it, expect } from 'vitest';
-import type { TrumpContext } from '@shengji/shared';
+import type { Card, Combo, TrumpContext } from '@shengji/shared';
 import { detectCombo } from '../src/combo';
 import { validateLead, validateFollow } from '../src/follow';
+import { evaluateThrowLead } from '../src/throw';
 import { c, joker } from './helpers';
 
 const trump: TrumpContext = { trumpSuit: 'H', level: 2 };
+
+function throwLead(cards: Card[]): Combo {
+  const result = evaluateThrowLead({ seat: 0, cards, hand: cards, hands: [cards, [], [], []], trump });
+  if (result.type !== 'success') throw new Error('test helper requires a successful throw');
+  return result.combo;
+}
 
 describe('validateLead', () => {
   it('valid single/pair/tractor accepted', () => {
@@ -147,13 +154,11 @@ describe('validateFollow', () => {
     if (res.ok) expect(res.combo).toBeNull();
   });
 
-  it('throw-pairs lead forces as many same-suit pairs as available', () => {
-    const lead = {
-      type: 'throw-pairs' as const,
-      suit: 'S' as const,
-      cards: [c('S', 9, 0), c('S', 9, 1), c('S', 12, 0), c('S', 12, 1)],
-      strength: 12,
-    };
+  it('mixed throw lead forces as many same-suit pairs as available', () => {
+    const lead = throwLead([
+      c('S', 9, 0), c('S', 9, 1),
+      c('S', 12, 0), c('S', 12, 1),
+    ]);
     const hand = [c('S', 3, 0), c('S', 3, 1), c('S', 4, 0), c('S', 7, 0), c('S', 8, 0)];
 
     expect(validateFollow(lead, [c('S', 3, 0), c('S', 4, 0), c('S', 7, 0), c('S', 8, 0)], hand, trump)).toMatchObject({
@@ -161,5 +166,54 @@ describe('validateFollow', () => {
       code: 'must-play-pair',
     });
     expect(validateFollow(lead, [c('S', 3, 0), c('S', 3, 1), c('S', 4, 0), c('S', 7, 0)], hand, trump).ok).toBe(true);
+  });
+
+  it('matches a tractor before an extra pair and single', () => {
+    const lead = throwLead([
+      c('S', 13, 0), c('S', 13, 1),
+      c('S', 14, 0), c('S', 14, 1),
+      c('S', 9, 0), c('S', 9, 1),
+      c('S', 7, 0),
+    ]);
+    const hand = [
+      c('S', 3, 0), c('S', 3, 1),
+      c('S', 4, 0), c('S', 4, 1),
+      c('S', 8, 0), c('S', 8, 1),
+      c('S', 6, 0), c('S', 10, 0),
+    ];
+    expect(
+      validateFollow(
+        lead,
+        [c('S', 3, 0), c('S', 3, 1), c('S', 8, 0), c('S', 8, 1), c('S', 6, 0), c('S', 10, 0), c('S', 4, 0)],
+        hand,
+        trump,
+      ),
+    ).toMatchObject({ ok: false, code: 'must-play-tractor' });
+    expect(
+      validateFollow(
+        lead,
+        [c('S', 3, 0), c('S', 3, 1), c('S', 4, 0), c('S', 4, 1), c('S', 8, 0), c('S', 8, 1), c('S', 6, 0)],
+        hand,
+        trump,
+      ).ok,
+    ).toBe(true);
+  });
+
+  it('allows only an all-trump full-structure response to kill a side-suit throw', () => {
+    const lead = throwLead([c('S', 14, 0), c('S', 14, 1), c('S', 13, 0)]);
+    const matchingTrump = [c('H', 8, 0), c('H', 8, 1), c('H', 7, 0)];
+    const matched = validateFollow(lead, matchingTrump, matchingTrump, trump);
+    expect(matched.ok).toBe(true);
+    if (matched.ok) expect(matched.combo).toMatchObject({ type: 'throw', suit: 'trump', strength: 108 });
+
+    const brokenTrump = [c('H', 8, 0), c('H', 7, 0), c('H', 6, 0)];
+    const broken = validateFollow(lead, brokenTrump, brokenTrump, trump);
+    expect(broken.ok).toBe(true);
+    if (broken.ok) expect(broken.combo).toBeNull();
+
+    const mixed = [c('S', 6, 0), c('H', 8, 0), c('H', 8, 1)];
+    const mixedResult = validateFollow(lead, mixed, mixed, trump);
+    expect(mixedResult.ok).toBe(true);
+    if (mixedResult.ok) expect(mixedResult.combo).toBeNull();
   });
 });

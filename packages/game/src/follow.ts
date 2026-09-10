@@ -1,5 +1,6 @@
 import type { Card, Combo, TrumpContext } from '@shengji/shared';
 import { detectCombo, findPairs, findTractors } from './combo';
+import { bestThrowStructureMatch, matchThrowCombo, throwStructureScore } from './throw';
 import { effectiveSuit } from './trump';
 
 export type PlayCheck = { ok: true; combo: Combo | null } | { ok: false; code: string };
@@ -33,6 +34,30 @@ function countPairsAmong(cards: Card[]): number {
   return pairs;
 }
 
+// 给机器人/提示层提供一组满足“先拖拉机、再对子”的合法甩牌跟牌。
+export function selectThrowFollowCards(
+  hand: Card[],
+  lead: Combo,
+  trump: TrumpContext,
+  cardCost: (card: Card) => number = () => 0,
+): Card[] {
+  if (lead.type !== 'throw') return [];
+  const count = lead.cards.length;
+  const suitCards = hand.filter((card) => effectiveSuit(card, trump) === lead.suit);
+  const byCost = (a: Card, b: Card): number => cardCost(a) - cardCost(b) || a.id.localeCompare(b.id);
+
+  if (suitCards.length <= count) {
+    const suitIds = new Set(suitCards.map((card) => card.id));
+    const fillers = hand.filter((card) => !suitIds.has(card.id)).sort(byCost);
+    return [...suitCards, ...fillers.slice(0, count - suitCards.length)];
+  }
+
+  const matched = bestThrowStructureMatch(suitCards, lead.components ?? [], trump, cardCost);
+  const usedIds = new Set(matched.usedCards.map((card) => card.id));
+  const fillers = suitCards.filter((card) => !usedIds.has(card.id)).sort(byCost);
+  return [...matched.usedCards, ...fillers.slice(0, count - matched.usedCards.length)];
+}
+
 // 跟牌校验：张数一致 + 跟花色 + 尽量跟牌型（对子/拖拉机强制）
 export function validateFollow(
   lead: Combo,
@@ -48,15 +73,32 @@ export function validateFollow(
   const requiredSuitCount = Math.min(suitInHand.length, lead.cards.length);
   if (suitInPlay.length < requiredSuitCount) return { ok: false, code: 'must-follow-suit' };
 
-  // 手牌足够跟满该花色时才附加牌型强制
-  if (lead.type === 'throw-pairs') {
-    const thrownPairCount = lead.cards.length / 2;
-    const availablePairs = findPairs(suitInHand, trump).length;
-    const requiredPairs = Math.min(availablePairs, thrownPairCount);
-    if (countPairsAmong(suitInPlay) < requiredPairs) {
-      return { ok: false, code: 'must-play-pair' };
+  // 混合甩牌视为多套牌型一起领出：先尽量匹配完整拖拉机，再尽量跟对子。
+  if (lead.type === 'throw') {
+    if (suitInHand.length >= lead.cards.length) {
+      const required = throwStructureScore(suitInHand, lead.components ?? [], trump);
+      const offered = throwStructureScore(suitInPlay, lead.components ?? [], trump);
+      if (offered.tractorCards < required.tractorCards) {
+        return { ok: false, code: 'must-play-tractor' };
+      }
+      if (offered.pairCards < required.pairCards) {
+        return { ok: false, code: 'must-play-pair' };
+      }
     }
-  } else if (suitInHand.length >= lead.cards.length) {
+
+    let combo: Combo | null = null;
+    if (cards.length > 0) {
+      const playedSuit = effectiveSuit(cards[0], trump);
+      const oneSuit = cards.every((card) => effectiveSuit(card, trump) === playedSuit);
+      if (oneSuit && (playedSuit === lead.suit || playedSuit === 'trump')) {
+        combo = matchThrowCombo(cards, lead, trump);
+      }
+    }
+    return { ok: true, combo };
+  }
+
+  // 手牌足够跟满该花色时才附加普通牌型强制
+  if (suitInHand.length >= lead.cards.length) {
     if (lead.type === 'tractor') {
       const pairLen = lead.cards.length / 2;
       const tractors = findTractors(suitInHand, trump, pairLen);

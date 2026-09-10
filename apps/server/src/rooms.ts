@@ -14,10 +14,12 @@ export type Seat = { player: PlayerSlot | null; bot: { name: string } | null };
 export type Room = {
   code: string;
   password: string | null;
+  chaodiEnabled: boolean;
   hostPlayerId: string;
   seats: [Seat, Seat, Seat, Seat];
   phase: Phase;
   round: RoundState | null;
+  roundNumber: number;
   plannedDealerSeat: number;
   teamLevels: [Rank, Rank];
   spectators: PlayerSlot[];
@@ -55,15 +57,22 @@ export class RoomManager {
     room.lastActiveAt = Date.now();
   }
 
-  createRoom(hostPlayerId: string, nickname: string, password: string | null): Room {
+  createRoom(
+    hostPlayerId: string,
+    nickname: string,
+    password: string | null,
+    chaodiEnabled = false,
+  ): Room {
     const host: PlayerSlot = { playerId: hostPlayerId, nickname, socketId: null, connected: true };
     const room: Room = {
       code: this.generateCode(),
       password,
+      chaodiEnabled,
       hostPlayerId,
       seats: [{ player: host, bot: null }, emptySeat(), emptySeat(), emptySeat()],
       phase: 'waiting',
       round: null,
+      roundNumber: 0,
       plannedDealerSeat: 0,
       teamLevels: [2, 2],
       spectators: [],
@@ -169,6 +178,7 @@ export class RoomManager {
         code: room.code,
         playerCount: room.seats.filter((s) => s.player !== null).length,
         hasPassword: room.password !== null,
+        chaodiEnabled: room.chaodiEnabled,
         phase: room.phase,
       });
     }

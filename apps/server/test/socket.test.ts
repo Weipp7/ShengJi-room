@@ -12,7 +12,8 @@ let port = 0;
 const clients: ClientSocket[] = [];
 
 beforeAll(async () => {
-  ctx = createApp();
+  // Socket 行为测试不需要真实等待 9 秒发牌，通过注入只压缩测试时间。
+  ctx = createApp(undefined, { dealDelayMs: () => 0 });
   await new Promise<void>((resolve) => ctx.httpServer.listen(0, resolve));
   port = (ctx.httpServer.address() as AddressInfo).port;
 });
@@ -103,7 +104,9 @@ describe('socket lifecycle', () => {
     }
 
     const all = [host, ...guests];
-    const statesPromise = Promise.all(all.map((c) => waitState(c, (s) => s.phase === 'bidding')));
+    const statesPromise = Promise.all(
+      all.map((c) => waitState(c, (s) => s.phase === 'bidding' && s.yourHand.length === 25)),
+    );
     host.emit(C2S.GameStart, { playerId: ids[0] });
     const states = await statesPromise;
 
@@ -133,7 +136,7 @@ describe('socket lifecycle', () => {
     for (const seat of [1, 2, 3]) {
       host.emit(C2S.BotAdd, { seat, playerId: ids[0] });
     }
-    const ready = waitState(host, (s) => s.phase === 'bidding');
+    const ready = waitState(host, (s) => s.phase === 'bidding' && s.yourHand.length === 25);
     host.emit(C2S.GameStart, { playerId: ids[0] });
     const before = await ready;
     const handBefore = before.yourHand.map((card) => card.id).sort();
@@ -202,6 +205,7 @@ describe('socket lifecycle', () => {
     const room: Room = {
       code: 'WINR1',
       password: null,
+      chaodiEnabled: false,
       hostPlayerId: 'winner-p0',
       seats: [
         { player: { playerId: 'winner-p0', nickname: 'P0', socketId: null, connected: true }, bot: null },
@@ -210,6 +214,7 @@ describe('socket lifecycle', () => {
         { player: null, bot: { name: '机器人4' } },
       ],
       phase: 'scoring',
+      roundNumber: 1,
       plannedDealerSeat: 0,
       teamLevels: [2, 2],
       spectators: [],
@@ -247,6 +252,7 @@ describe('socket lifecycle', () => {
     const room: Room = {
       code: 'HOLD1',
       password: null,
+      chaodiEnabled: false,
       hostPlayerId: 'hold-p0',
       seats: [
         { player: { playerId: 'hold-p0', nickname: 'P0', socketId: null, connected: true }, bot: null },
@@ -255,6 +261,7 @@ describe('socket lifecycle', () => {
         { player: null, bot: { name: '机器人4' } },
       ],
       phase: 'playing',
+      roundNumber: 1,
       plannedDealerSeat: 0,
       teamLevels: [2, 2],
       spectators: [],
@@ -287,15 +294,19 @@ describe('socket lifecycle', () => {
       attemptedCards: [base.hands[0][0], base.hands[0][1], base.hands[0][2], base.hands[0][3]],
       actualCards: [base.hands[0][0], base.hands[0][1]],
       challengedCards: [base.hands[0][0], base.hands[0][1]],
+      components: [
+        { type: 'pair', suit: 'S', strength: 5, cards: [base.hands[0][0], base.hands[0][1]] },
+      ],
       success: false,
       n: 2,
       penaltyPoints: 40,
       beneficiaryTeam: 1,
-      reason: 'beatable-pair',
+      reason: 'beatable-component',
     };
     const room: Room = {
       code: 'THRW1',
       password: null,
+      chaodiEnabled: false,
       hostPlayerId: 'throw-p0',
       seats: [
         { player: { playerId: 'throw-p0', nickname: 'P0', socketId: null, connected: true }, bot: null },
@@ -304,6 +315,7 @@ describe('socket lifecycle', () => {
         { player: null, bot: { name: '机器人4' } },
       ],
       phase: 'playing',
+      roundNumber: 1,
       plannedDealerSeat: 0,
       teamLevels: [2, 2],
       spectators: [],
@@ -325,5 +337,9 @@ describe('socket lifecycle', () => {
     expect(view.throwEvents[0].id).toBe('throw-projected');
     expect(view.throwPenaltyPoints).toEqual([0, 40]);
     expect(view.defenderPoints).toBe(60);
+
+    room.round!.throwPenaltyPoints = [60, 0];
+    room.round!.defenderTrickPoints = 20;
+    expect(projectRoomState(room, 'throw-p0').defenderPoints).toBe(-40);
   });
 });

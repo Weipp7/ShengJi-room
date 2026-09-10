@@ -8,8 +8,6 @@ export function trickWinner(plays: TrickPlay[], trump: TrumpContext): number {
   void trump;
   const lead = plays[0].combo;
   if (lead === null) throw new Error('lead combo must not be null');
-  if (lead.type === 'throw-pairs') return plays[0].seat;
-
   let winner = plays[0];
   let winning = lead;
   for (const play of plays.slice(1)) {

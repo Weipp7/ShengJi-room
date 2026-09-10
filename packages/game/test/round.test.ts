@@ -1,12 +1,39 @@
 import { describe, it, expect } from 'vitest';
 import type { RoundState, StepResult } from '../src/round';
-import { createRound, applyReveal, applyPass, applyBury, applyPlay } from '../src/round';
+import {
+  advanceDeal,
+  closePreKittyBidWindow,
+  createRound,
+  applyReveal,
+  applyPass,
+  applyBury,
+  applyPlay,
+} from '../src/round';
 import { validateLead, validateFollow } from '../src/follow';
 import { c, joker, mulberry32 } from './helpers';
 
 function expectOk(r: StepResult): RoundState {
   if (!r.ok) throw new Error(`step failed: ${r.error.code}`);
   return r.state;
+}
+
+function finishPostBuryBidding(s: RoundState): RoundState {
+  let next = s;
+  while (next.phase === 'bidding' && next.biddingStage === 'post-bury') {
+    next = expectOk(applyPass(next, next.biddingTurn!));
+  }
+  return next;
+}
+
+function closeBidWindow(s: RoundState): RoundState {
+  const result = closePreKittyBidWindow(s);
+  if (!result.ok) throw new Error(`close bid window failed: ${result.error.code}`);
+  if (result.action === 'redeal') throw new Error('unexpected first-round redeal');
+  return result.state;
+}
+
+function buryAndStartPlaying(s: RoundState, seat: number, cardIds: string[]): RoundState {
+  return finishPostBuryBidding(expectOk(applyBury(s, seat, cardIds)));
 }
 
 // 遍历 turnSeat 手牌，返回第一张可合法打出的单张 id
@@ -55,8 +82,13 @@ function cardCount(s: RoundState): number {
 }
 
 describe('round state machine', () => {
-  it('bid lifecycle resets pass streak and finalizes after three passes after latest reveal', () => {
-    let s = createRound({ plannedDealerSeat: 0, teamLevels: [2, 2], rng: mulberry32(12) });
+  it('uses a shared timed pre-kitty window and resets its deadline after each legal counter', () => {
+    let s = createRound({
+      plannedDealerSeat: 0,
+      teamLevels: [2, 2],
+      rng: mulberry32(12),
+      now: 1_000,
+    });
     s = {
       ...s,
       hands: [
@@ -67,89 +99,227 @@ describe('round state machine', () => {
       ],
     };
 
-    s = expectOk(applyReveal(s, 0, ['S-2-0']));
+    s = expectOk(applyReveal(s, 0, ['S-2-0'], 2_000));
     expect(s.bidHistory.map((event) => event.kind)).toEqual(['suit-single']);
     expect(s).toMatchObject({
       phase: 'bidding',
       dealerSeat: 0,
-      biddingTurn: 1,
+      biddingTurn: null,
+      bidWindowEndsAt: 7_000,
       passStreak: 0,
       trump: { trumpSuit: 'S', level: 2 },
       currentBid: { seat: 0, kind: 'suit-single', suit: 'S' },
     });
 
-    s = expectOk(applyReveal(s, 1, ['H-2-0', 'H-2-1']));
+    s = expectOk(applyReveal(s, 1, ['H-2-0', 'H-2-1'], 3_000));
     expect(s.bidHistory.map((event) => event.kind)).toEqual(['suit-single', 'suit-pair']);
     expect(s).toMatchObject({
       phase: 'bidding',
       dealerSeat: 1,
-      biddingTurn: 2,
+      biddingTurn: null,
+      bidWindowEndsAt: 8_000,
       passStreak: 0,
       trump: { trumpSuit: 'H', level: 2 },
       currentBid: { seat: 1, kind: 'suit-pair', suit: 'H' },
     });
 
-    s = expectOk(applyPass(s, 2));
-    expect(s.passStreak).toBe(1);
-    s = expectOk(applyPass(s, 3));
-    expect(s.passStreak).toBe(2);
-    s = expectOk(applyPass(s, 0));
+    const beforeExpiredReveal = structuredClone(s);
+    expect(applyReveal(s, 2, [], 8_000)).toMatchObject({
+      ok: false,
+      error: { code: 'bid-window-closed' },
+    });
+    expect(s).toEqual(beforeExpiredReveal);
+
+    expect(applyPass(s, 2)).toMatchObject({
+      ok: false,
+      error: { code: 'pass-not-required' },
+    });
+    s = closeBidWindow(s);
     expect(s.phase).toBe('burying');
     expect(s.dealerSeat).toBe(1);
     expect(s.trump.trumpSuit).toBe('H');
     expect(s.hands[1]).toHaveLength(10);
-    expect(s.biddingStage).toBe('post-dealer');
+    expect(s.biddingStage).toBeNull();
   });
 
-  it('dealer can counter again after taking the kitty and before burying', () => {
-    let s = createRound({ plannedDealerSeat: 0, teamLevels: [2, 2], rng: mulberry32(99) });
-    s = {
-      ...s,
-      hands: [[joker('small', 0), joker('big', 0)], [], [], []],
-      kitty: [
-        c('C', 4, 0),
-        c('C', 5, 0),
-        c('C', 6, 0),
-        c('C', 7, 0),
-        c('C', 8, 0),
-        c('C', 9, 0),
-        c('C', 10, 0),
-        c('C', 11, 0),
-      ],
-    };
-
-    s = expectOk(applyReveal(s, 0, ['joker-small-0']));
-    s = expectOk(applyPass(s, 1));
-    s = expectOk(applyPass(s, 2));
-    s = expectOk(applyPass(s, 3));
-    expect(s.phase).toBe('burying');
-    expect(s.biddingStage).toBe('post-dealer');
-
-    s = expectOk(applyReveal(s, 0, ['joker-big-0']));
-    expect(s.phase).toBe('burying');
-    expect(s.biddingStage).toBe('post-dealer');
-    expect(s.currentBid).toMatchObject({ seat: 0, kind: 'big-joker-single', suit: null });
-    expect(s.bidHistory.map((bid) => bid.kind)).toEqual(['small-joker-single', 'big-joker-single']);
-    expect(s.turnSeat).toBe(0);
-  });
-
-  it('only the dealer can counter during the post-dealer window', () => {
-    let s = createRound({ plannedDealerSeat: 0, teamLevels: [2, 2], rng: mulberry32(100) });
-    s = {
-      ...s,
-      hands: [[joker('small', 0)], [joker('big', 0)], [], []],
-      kitty: [],
-    };
-
-    s = expectOk(applyReveal(s, 0, ['joker-small-0']));
-    s = expectOk(applyPass(s, 1));
-    s = expectOk(applyPass(s, 2));
-    s = expectOk(applyPass(s, 3));
-
-    expect(applyReveal(s, 1, ['joker-big-0'])).toMatchObject({
-      ok: false,
-      error: { code: 'not-dealer' },
+  it('deals progressively and allows any player to reveal only cards already received', () => {
+    let s = createRound({
+      plannedDealerSeat: 0,
+      teamLevels: [2, 2],
+      rng: mulberry32(99),
+      progressiveDeal: true,
     });
+    s = {
+      ...s,
+      hands: [[c('S', 2, 0), c('S', 2, 1)], [], [], []],
+    };
+
+    expect(s.dealtCount).toBe(0);
+    expect(applyReveal(s, 0, ['S-2-0'])).toMatchObject({
+      ok: false,
+      error: { code: 'cards-not-in-hand' },
+    });
+    s = advanceDeal(s);
+    s = expectOk(applyReveal(s, 0, ['S-2-0'], 2_000));
+    expect(s.currentBid).toMatchObject({ seat: 0, kind: 'suit-single' });
+    expect(applyReveal(s, 0, ['S-2-0', 'S-2-1'])).toMatchObject({
+      ok: false,
+      error: { code: 'cards-not-in-hand' },
+    });
+
+    while (s.dealtCount < 25) s = advanceDeal(s);
+    expect(s.biddingStage).toBe('dealing');
+    s = advanceDeal(s);
+    expect(s.biddingStage).toBe('pre-dealer');
+    expect(s.biddingTurn).toBeNull();
+    expect(s.bidWindowEndsAt).not.toBeNull();
+  });
+
+  it('requests a redeal when the first-round shared window closes without a bid', () => {
+    const s = createRound({ plannedDealerSeat: 0, teamLevels: [2, 2], rng: mulberry32(991) });
+    expect(closePreKittyBidWindow(s)).toEqual({ ok: true, action: 'redeal' });
+  });
+
+  it('treats a later-round no-bid contract as final no-trump even when chaodi is enabled', () => {
+    let s = createRound({
+      plannedDealerSeat: 2,
+      teamLevels: [2, 2],
+      rng: mulberry32(992),
+      isFirstRound: false,
+      chaodiEnabled: true,
+    });
+    s = closeBidWindow(s);
+    expect(s.trump.trumpSuit).toBeNull();
+    expect(s.buryingSeat).toBe(2);
+    s = expectOk(applyBury(s, 2, s.hands[2].slice(0, 8).map((card) => card.id)));
+    expect(s.phase).toBe('playing');
+    expect(s.biddingStage).toBeNull();
+  });
+
+  it('skips post-bury counters when chaodi is disabled even after a successful bid', () => {
+    let s = createRound({
+      plannedDealerSeat: 0,
+      teamLevels: [2, 2],
+      rng: mulberry32(993),
+      isFirstRound: false,
+      chaodiEnabled: false,
+    });
+    const bidderSeat = s.hands.findIndex((hand) =>
+      hand.some((card) => card.kind === 'suit' && card.rank === s.level),
+    );
+    const levelCard = s.hands[bidderSeat].find(
+      (card) => card.kind === 'suit' && card.rank === s.level,
+    );
+    expect(levelCard).toBeDefined();
+    s = expectOk(applyReveal(s, bidderSeat, [levelCard!.id]));
+    s = closeBidWindow(s);
+    s = expectOk(applyBury(s, 0, s.hands[0].slice(0, 8).map((card) => card.id)));
+    expect(s.phase).toBe('playing');
+    expect(s.postBuryBidQueue).toEqual([]);
+  });
+
+  it('keeps the predetermined dealer on later rounds when another player calls', () => {
+    let s = createRound({
+      plannedDealerSeat: 0,
+      teamLevels: [2, 2],
+      rng: mulberry32(100),
+      isFirstRound: false,
+    });
+    s = {
+      ...s,
+      hands: [[], [c('H', 2, 0)], [], []],
+    };
+    s = expectOk(applyReveal(s, 1, ['H-2-0']));
+    expect(s.dealerSeat).toBe(0);
+    expect(s.currentBid?.seat).toBe(1);
+    expect(s.trump.trumpSuit).toBe('H');
+  });
+
+  it('locks dealer/current bidder after burying and restores them after another player counters', () => {
+    let s = createRound({
+      plannedDealerSeat: 0,
+      teamLevels: [2, 2],
+      rng: mulberry32(101),
+      isFirstRound: false,
+      chaodiEnabled: true,
+    });
+    s = {
+      ...s,
+      hands: [
+        [
+          ...Array.from({ length: 31 }, (_, i) => c('C', ((i % 12) + 3) as 3, i)),
+          joker('small', 0),
+          joker('small', 1),
+        ],
+        [c('H', 2, 0), c('H', 2, 1)],
+        [c('S', 2, 0), c('S', 2, 1)],
+        [c('D', 2, 0), c('D', 2, 1)],
+      ],
+      phase: 'burying',
+      dealerSeat: 0,
+      currentBid: {
+        seat: 1,
+        kind: 'suit-pair',
+        suit: 'H',
+        cards: [c('H', 2, 0), c('H', 2, 1)],
+      },
+      trump: { trumpSuit: 'H', level: 2 },
+      buryingSeat: 0,
+    };
+
+    s = expectOk(applyBury(s, 0, s.hands[0].slice(0, 8).map((card) => card.id)));
+    expect(s).toMatchObject({
+      phase: 'bidding',
+      biddingStage: 'post-bury',
+      postBuryBidQueue: [2, 3],
+      biddingTurn: 2,
+    });
+    expect(applyReveal(s, 2, ['S-2-0'])).toMatchObject({
+      ok: false,
+      error: { code: 'invalid-bid' },
+    });
+
+    s = expectOk(applyReveal(s, 2, ['S-2-0', 'S-2-1']));
+    expect(s.phase).toBe('burying');
+    expect(s.buryingSeat).toBe(2);
+    expect(s.postBuryBidQueue).toEqual([3, 0, 1]);
+    expect(s.biddingTurn).toBeNull();
+    expect(s.dealerSeat).toBe(0);
+    expect(s.currentBid?.seat).toBe(2);
+
+    // 反主者拿起当前底牌，重新埋 8 张后才开启下一轮反主。
+    expect(s.hands[2]).toHaveLength(10);
+    expect(s.kitty).toHaveLength(0);
+    s = expectOk(applyBury(s, 2, s.hands[2].slice(2).map((card) => card.id)));
+    expect(s).toMatchObject({
+      phase: 'bidding',
+      biddingStage: 'post-bury',
+      postBuryBidQueue: [3, 0, 1],
+      biddingTurn: 3,
+      buryingSeat: null,
+    });
+    expect(applyReveal(s, 3, ['D-2-0', 'D-2-1'])).toMatchObject({
+      ok: false,
+      error: { code: 'invalid-bid' },
+    });
+    expect(applyReveal(s, 2, ['S-2-0', 'S-2-1'])).toMatchObject({
+      ok: false,
+      error: { code: 'wrong-turn' },
+    });
+
+    // 前一轮被锁定的庄家恢复反主权；反主后同样拿底重埋，但庄家身份不变。
+    s = expectOk(applyPass(s, 3));
+    s = expectOk(applyReveal(s, 0, ['joker-small-0', 'joker-small-1']));
+    expect(s.phase).toBe('burying');
+    expect(s.buryingSeat).toBe(0);
+    expect(s.dealerSeat).toBe(0);
+    expect(s.hands[0]).toHaveLength(33);
+    s = expectOk(applyBury(s, 0, s.hands[0].slice(-8).map((card) => card.id)));
+    expect(s.postBuryBidQueue).toEqual([1, 2, 3]);
+    expect(s.biddingTurn).toBe(1);
+    for (const seat of [1, 2, 3]) s = expectOk(applyPass(s, seat));
+    expect(s.phase).toBe('playing');
+    expect(s.turnSeat).toBe(0);
   });
 
   it('invalid and repeated reveal attempts do not mutate state', () => {
@@ -179,12 +349,12 @@ describe('round state machine', () => {
     });
     expect(s).toEqual(beforeMalformed);
 
-    const beforeWrongTurn = structuredClone(s);
+    const beforeLockedBidder = structuredClone(s);
     expect(applyReveal(s, 0, ['S-2-0'])).toMatchObject({
       ok: false,
-      error: { code: 'wrong-turn' },
+      error: { code: 'current-bidder-locked' },
     });
-    expect(s).toEqual(beforeWrongTurn);
+    expect(s).toEqual(beforeLockedBidder);
   });
 
   it('uses the planned dealer team level for the whole bidding phase', () => {
@@ -210,18 +380,21 @@ describe('round state machine', () => {
   });
 
   it('full round with scripted actions reaches scoring', () => {
-    let s = createRound({ plannedDealerSeat: 0, teamLevels: [2, 2], rng: mulberry32(7) });
+    let s = createRound({
+      plannedDealerSeat: 0,
+      teamLevels: [2, 2],
+      rng: mulberry32(7),
+      isFirstRound: false,
+    });
     expect(s.phase).toBe('bidding');
-    // 全员 pass → 无主局，庄=0，进入 burying
-    for (const seat of [0, 1, 2, 3]) s = expectOk(applyPass(s, seat));
+    // 后续局 5 秒内无人亮主 → 无主局，计划庄家拿底。
+    s = closeBidWindow(s);
     expect(s.phase).toBe('burying');
     expect(s.trump.trumpSuit).toBeNull();
     expect(s.dealerSeat).toBe(0);
     expect(s.hands[0]).toHaveLength(33);
     // 庄家埋 8 张
-    s = expectOk(
-      applyBury(s, 0, s.hands[0].slice(0, 8).map((card) => card.id)),
-    );
+    s = buryAndStartPlaying(s, 0, s.hands[0].slice(0, 8).map((card) => card.id));
     expect(s.phase).toBe('playing');
     expect(s.hands[0]).toHaveLength(25);
     expect(s.kitty).toHaveLength(8);
@@ -233,16 +406,19 @@ describe('round state machine', () => {
     expect(s.phase).toBe('scoring');
     expect(s.tricksPlayed).toBe(25);
     expect(s.result).not.toBeNull();
-    expect(s.result!.defenderPoints).toBeGreaterThanOrEqual(0);
+    expect(Number.isFinite(s.result!.defenderPoints)).toBe(true);
     expect(s.hands.every((h) => h.length === 0)).toBe(true);
   });
 
   it('round ends when hands are empty even with multi-card plays', () => {
-    let s = createRound({ plannedDealerSeat: 0, teamLevels: [2, 2], rng: mulberry32(99) });
-    for (const seat of [0, 1, 2, 3]) s = expectOk(applyPass(s, seat));
-    s = expectOk(
-      applyBury(s, 0, s.hands[0].slice(0, 8).map((card) => card.id)),
-    );
+    let s = createRound({
+      plannedDealerSeat: 0,
+      teamLevels: [2, 2],
+      rng: mulberry32(99),
+      isFirstRound: false,
+    });
+    s = closeBidWindow(s);
+    s = buryAndStartPlaying(s, 0, s.hands[0].slice(0, 8).map((card) => card.id));
     // 领牌尽量出对子 → 手牌会早于 25 墩打空
     let guard = 0;
     while (s.phase === 'playing' && guard++ < 400) {
@@ -254,11 +430,14 @@ describe('round state machine', () => {
   });
 
   it('keeps last trick winner stable while the next trick advances', () => {
-    let s = createRound({ plannedDealerSeat: 0, teamLevels: [2, 2], rng: mulberry32(5) });
-    for (const seat of [0, 1, 2, 3]) s = expectOk(applyPass(s, seat));
-    s = expectOk(
-      applyBury(s, 0, s.hands[0].slice(0, 8).map((card) => card.id)),
-    );
+    let s = createRound({
+      plannedDealerSeat: 0,
+      teamLevels: [2, 2],
+      rng: mulberry32(5),
+      isFirstRound: false,
+    });
+    s = closeBidWindow(s);
+    s = buryAndStartPlaying(s, 0, s.hands[0].slice(0, 8).map((card) => card.id));
 
     // 第一墩用合法单张打满，记录真实收墩者。
     while (s.phase === 'playing' && s.currentTrick.length < 3) {
@@ -312,6 +491,42 @@ describe('round state machine', () => {
     expect(s.result?.defenderPoints).toBe(80);
   });
 
+  it('uses the largest throw component rather than every thrown card for kitty multiplication', () => {
+    let s = createRound({ plannedDealerSeat: 0, teamLevels: [2, 2], rng: mulberry32(32) });
+    s = {
+      ...s,
+      phase: 'playing',
+      biddingStage: null,
+      dealerSeat: 0,
+      trump: { trumpSuit: 'S', level: 2 },
+      hands: [
+        [c('D', 3, 0), c('D', 4, 0), c('D', 6, 0), c('D', 7, 0), c('D', 8, 0), c('D', 9, 0), c('D', 12, 0)],
+        [c('H', 14, 0), c('H', 14, 1), c('H', 13, 0), c('H', 13, 1), c('H', 12, 0), c('H', 11, 0), c('H', 11, 1)],
+        [c('H', 10, 0), c('H', 10, 1), c('H', 9, 0), c('H', 9, 1), c('H', 8, 0), c('H', 7, 0), c('H', 7, 1)],
+        [c('H', 6, 0), c('H', 6, 1), c('H', 5, 0), c('H', 5, 1), c('H', 4, 0), c('H', 4, 1), c('H', 3, 0)],
+      ],
+      kitty: [c('D', 5, 0), c('D', 10, 0)],
+      currentTrick: [],
+      lastTrick: [],
+      lastTrickWinnerSeat: null,
+      defenderTrickPoints: 0,
+      tricksPlayed: 24,
+      turnSeat: 1,
+      result: null,
+    };
+
+    s = expectOk(applyPlay(s, 1, ['H-14-0', 'H-14-1', 'H-13-0', 'H-13-1', 'H-12-0', 'H-11-0', 'H-11-1']));
+    expect(s.currentTrick[0].throwEvent?.success).toBe(true);
+    s = expectOk(applyPlay(s, 2, ['H-10-0', 'H-10-1', 'H-9-0', 'H-9-1', 'H-8-0', 'H-7-0', 'H-7-1']));
+    s = expectOk(applyPlay(s, 3, ['H-6-0', 'H-6-1', 'H-5-0', 'H-5-1', 'H-4-0', 'H-4-1', 'H-3-0']));
+    s = expectOk(applyPlay(s, 0, ['D-3-0', 'D-4-0', 'D-6-0', 'D-7-0', 'D-8-0', 'D-9-0', 'D-12-0']));
+
+    expect(s.phase).toBe('scoring');
+    expect(s.lastTrickWinnerSeat).toBe(1);
+    expect(s.result?.kittyBonus).toBe(240); // 15 分 × 2^4，而不是 × 2^7
+    expect(s.result?.baseDefenderPoints).toBe(290);
+  });
+
   it('failed throw lead only places the lowest beatable pair and records team penalty', () => {
     let s = createRound({ plannedDealerSeat: 0, teamLevels: [2, 2], rng: mulberry32(61) });
     const attempt = [c('S', 5, 0), c('S', 5, 1), c('S', 8, 0), c('S', 8, 1)];
@@ -358,6 +573,8 @@ describe('round state machine', () => {
     expect(s.lastTrick[0].cards).toHaveLength(2);
     expect(s.lastTrickWinnerSeat).toBe(1);
     expect(s.throwPenaltyPoints).toEqual([0, 40]);
+    expect(s.trickHistory).toHaveLength(1);
+    expect(s.trickHistory[0]).toEqual(s.lastTrick);
   });
 
   it('successful throw lead enters the full trick and the leader wins the trick', () => {
@@ -389,7 +606,7 @@ describe('round state machine', () => {
 
     s = expectOk(applyPlay(s, 0, attempt.map((card) => card.id)));
     expect(s.currentTrick[0].cards).toHaveLength(4);
-    expect(s.currentTrick[0].combo).toMatchObject({ type: 'throw-pairs', suit: 'S' });
+    expect(s.currentTrick[0].combo).toMatchObject({ type: 'throw', suit: 'S' });
     expect(s.currentTrick[0].throwEvent).toMatchObject({ success: true, n: 2 });
     expect(s.throwEvents).toHaveLength(1);
 
@@ -400,7 +617,7 @@ describe('round state machine', () => {
     expect(s.throwPenaltyPoints).toEqual([0, 0]);
   });
 
-  it('teammate cards do not fail a throw lead or add penalty', () => {
+  it('teammate cards also fail a throw and penalize the throwing side', () => {
     let s = createRound({ plannedDealerSeat: 0, teamLevels: [2, 2], rng: mulberry32(63) });
     const attempt = [c('S', 5, 0), c('S', 5, 1), c('S', 8, 0), c('S', 8, 1)];
     s = {
@@ -429,10 +646,10 @@ describe('round state machine', () => {
 
     s = expectOk(applyPlay(s, 0, attempt.map((card) => card.id)));
 
-    expect(s.currentTrick[0].cards.map((card) => card.id)).toEqual(attempt.map((card) => card.id));
-    expect(s.currentTrick[0].throwEvent).toMatchObject({ success: true, penaltyPoints: 0 });
-    expect(s.throwPenaltyPoints).toEqual([0, 0]);
-    expect(s.hands[0]).toHaveLength(0);
+    expect(s.currentTrick[0].cards.map((card) => card.id)).toEqual(['S-5-0', 'S-5-1']);
+    expect(s.currentTrick[0].throwEvent).toMatchObject({ success: false, penaltyPoints: 40 });
+    expect(s.throwPenaltyPoints).toEqual([0, 40]);
+    expect(s.hands[0].map((card) => card.id)).toEqual(['S-8-0', 'S-8-1']);
   });
 
   it('reveal makes revealer the dealer and sets trump', () => {
@@ -440,7 +657,7 @@ describe('round state machine', () => {
     // 沿叫主轮次找到第一个持有级牌的座位并亮主
     let revealed = false;
     for (let i = 0; i < 4 && !revealed; i++) {
-      const seat = s.biddingTurn;
+      const seat = i;
       const levelCard = s.hands[seat].find(
         (card) => card.kind === 'suit' && card.rank === s.trump.level,
       );
@@ -450,39 +667,47 @@ describe('round state machine', () => {
         expect(s.currentBid).not.toBeNull();
         expect(s.trump.trumpSuit).toBe(levelCard.kind === 'suit' ? levelCard.suit : null);
         revealed = true;
-      } else {
-        s = expectOk(applyPass(s, seat));
       }
     }
     expect(revealed).toBe(true);
     // 其余三家过 → 进入 burying，庄家即亮主者
     const dealer = s.dealerSeat;
-    while (s.phase === 'bidding') s = expectOk(applyPass(s, s.biddingTurn));
+    s = closeBidWindow(s);
     expect(s.phase).toBe('burying');
     expect(s.dealerSeat).toBe(dealer);
   });
 
   it('wrong turn / wrong phase / bad bury count rejected', () => {
     let s = createRound({ plannedDealerSeat: 0, teamLevels: [2, 2], rng: mulberry32(3) });
-    const wrongSeat = (s.biddingTurn + 1) % 4;
-    expect(applyPass(s, wrongSeat)).toMatchObject({ ok: false, error: { code: 'wrong-turn' } });
+    expect(applyPass(s, 1)).toMatchObject({
+      ok: false,
+      error: { code: 'pass-not-required' },
+    });
     expect(applyBury(s, 0, [])).toMatchObject({ ok: false, error: { code: 'wrong-phase' } });
-    for (const seat of [0, 1, 2, 3]) s = expectOk(applyPass(s, seat));
+    s = { ...s, isFirstRound: false };
+    s = closeBidWindow(s);
     expect(
       applyBury(s, 0, s.hands[0].slice(0, 7).map((card) => card.id)),
     ).toMatchObject({ ok: false, error: { code: 'bad-bury-count' } });
     expect(
       applyBury(s, 1, s.hands[1].slice(0, 8).map((card) => card.id)),
-    ).toMatchObject({ ok: false, error: { code: 'not-dealer' } });
+    ).toMatchObject({ ok: false, error: { code: 'not-burying-player' } });
   });
 
   it('all cards conserved: hands+kitty+trick = 108 minus completed tricks', () => {
-    let s = createRound({ plannedDealerSeat: 1, teamLevels: [5, 3], rng: mulberry32(42) });
+    let s = createRound({
+      plannedDealerSeat: 1,
+      teamLevels: [5, 3],
+      rng: mulberry32(42),
+      isFirstRound: false,
+    });
     expect(cardCount(s)).toBe(108);
-    for (let i = 0; i < 4; i++) s = expectOk(applyPass(s, s.biddingTurn));
+    s = closeBidWindow(s);
     expect(cardCount(s)).toBe(108); // 底牌并入庄家手
-    s = expectOk(
-      applyBury(s, s.dealerSeat, s.hands[s.dealerSeat].slice(0, 8).map((card) => card.id)),
+    s = buryAndStartPlaying(
+      s,
+      s.dealerSeat,
+      s.hands[s.dealerSeat].slice(0, 8).map((card) => card.id),
     );
     let played = 0;
     while (s.phase === 'playing') {

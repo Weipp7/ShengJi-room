@@ -7,6 +7,7 @@ import StatusBar from '../src/components/StatusBar';
 function mkView(partial: Partial<RoomStateView>): RoomStateView {
   return {
     roomCode: 'ROOM1',
+    chaodiEnabled: false,
     phase: 'playing',
     seats: ['你', '右家', '对家', '左家'].map((nickname, seat) => ({
       seat,
@@ -21,10 +22,14 @@ function mkView(partial: Partial<RoomStateView>): RoomStateView {
     yourHand: [],
     trump: { trumpSuit: 'H', level: 2 },
     dealerSeat: 2,
+    buryingSeat: null,
     currentBid: null,
     bidHistory: [],
+    isFirstRound: false,
+    redealCount: 0,
     biddingStage: null,
     biddingTurn: null,
+    bidWindowEndsAt: null,
     turnSeat: 1,
     currentTrick: [],
     lastTrick: [],
@@ -49,11 +54,19 @@ describe('StatusBar', () => {
 
     expect(html).toContain('房间');
     expect(html).toContain('ROOM1');
+    expect(html).toContain('炒底 OFF');
     expect(html).toContain('出牌');
     expect(html).toContain('轮到');
     expect(html).toContain('右家');
     expect(html).not.toContain('级牌');
     expect(html).not.toContain('闲家');
     expect(html).not.toContain('庄');
+  });
+
+  it('shows when the room was created with chaodi enabled', () => {
+    const html = renderToStaticMarkup(
+      React.createElement(StatusBar, { view: mkView({ chaodiEnabled: true }), onLeave: () => {} }),
+    );
+    expect(html).toContain('炒底 ON');
   });
 });

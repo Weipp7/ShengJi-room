@@ -78,23 +78,25 @@ export function describeContract(view: RoomStateView): ContractSummary {
     const bidder = seatName(view, view.currentBid.seat);
     const dealer = seatName(view, view.dealerSeat);
     const bid = bidLabel(view.currentBid, level);
-    const action = previousBid === null ? '亮主' : '反主';
+    const action = previousBid === null ? (view.isFirstRound ? '抢庄' : '亮主') : '反主';
     const title =
-      view.phase === 'bidding'
-        ? `${bidder} ${action}`
-        : view.phase === 'burying' && view.biddingStage === 'post-dealer'
-          ? '庄后反牌窗口'
+      view.phase === 'bidding' && view.biddingStage === 'post-bury'
+        ? '埋底后反主'
+        : view.phase === 'bidding'
+          ? `${bidder} ${action}`
           : '本局契约';
     const previousText =
       previousBid === null
         ? ''
         : `（压过 ${seatName(view, previousBid.seat)} ${bidLabel(previousBid, level)}）`;
     const stageLabel =
-      view.phase === 'bidding' && view.biddingStage === 'pre-dealer'
-        ? '庄前反牌中'
-        : view.phase === 'burying' && view.biddingStage === 'post-dealer'
-          ? '庄后反牌中'
-          : null;
+      view.phase === 'bidding' && view.biddingStage === 'dealing'
+        ? '发牌中可亮主'
+        : view.phase === 'bidding' && view.biddingStage === 'pre-dealer'
+          ? '摸底前 5 秒自由反主'
+          : view.phase === 'bidding' && view.biddingStage === 'post-bury'
+            ? '埋底后反主'
+            : null;
     const stageText = stageLabel === null ? '' : `，${stageLabel}`;
     return {
       mode: 'bid',
@@ -115,8 +117,14 @@ export function describeContract(view: RoomStateView): ContractSummary {
   }
   return {
     mode: 'pending',
-    title: '还没有人亮主',
-    detail: `等待亮主或反主，${levelText}`,
+    title: view.isFirstRound ? '还没有人抢庄' : '还没有人亮主',
+    detail: `${
+      view.biddingStage === 'dealing'
+        ? '发牌中，'
+        : view.biddingStage === 'pre-dealer'
+          ? '摸底前 5 秒窗口，'
+          : ''
+    }等待亮主或反主，${levelText}`,
     cards: [],
     facts: contractFacts(view, null),
   };

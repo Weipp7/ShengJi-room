@@ -1,22 +1,21 @@
 import type { Bid, BidKind, Card, JokerCard, Rank, Suit } from '@shengji/shared';
 
-const kindForCount = (
-  prefix: 'suit' | 'small-joker' | 'big-joker',
-  count: number,
-): BidKind => {
-  if (count === 1) return `${prefix}-single` as BidKind;
-  if (count === 2) return `${prefix}-pair` as BidKind;
-  return `${prefix}-multiple` as BidKind;
+const SUIT_PAIR_STRENGTH: Record<Suit, number> = {
+  D: 1,
+  C: 2,
+  H: 3,
+  S: 4,
 };
 
-function bidCategory(bid: Pick<Bid, 'kind'>): number {
-  if (bid.kind.startsWith('big-joker')) return 3;
-  if (bid.kind.startsWith('small-joker')) return 2;
-  return 1;
+export function isPairBid(bid: Pick<Bid, 'kind' | 'cards'>): boolean {
+  return bid.cards.length === 2 && bid.kind.endsWith('-pair');
 }
 
-function bidStrength(bid: Bid): number {
-  return bid.cards.length * 10 + bidCategory(bid);
+// 反主对子强度：大王 > 小王 > 黑桃 > 红桃 > 草花 > 方块。
+export function pairBidStrength(bid: Pick<Bid, 'kind' | 'suit'>): number {
+  if (bid.kind === 'big-joker-pair') return 6;
+  if (bid.kind === 'small-joker-pair') return 5;
+  return bid.suit === null ? 0 : SUIT_PAIR_STRENGTH[bid.suit];
 }
 
 function sameSuitLevelCards(cards: Card[], level: Rank): { suit: Suit; cards: Card[] } | null {
@@ -37,17 +36,24 @@ function sameJokers(cards: Card[]): { joker: JokerCard['joker']; cards: Card[] }
   return null;
 }
 
-// 识别亮牌：任意张同花色级牌，或任意张同类王；非法返回 null
+// 识别亮牌：单张/一对同花色级牌，或一对同类王；单王和三张以上均非法。
 export function detectBid(cards: Card[], level: Rank, seat: number): Bid | null {
-  if (cards.length === 0) return null;
+  if (cards.length < 1 || cards.length > 2) return null;
   const suitBid = sameSuitLevelCards(cards, level);
-  if (suitBid !== null) return { seat, kind: kindForCount('suit', cards.length), suit: suitBid.suit, cards };
-
-  const jokerBid = sameJokers(cards);
-  if (jokerBid !== null) {
+  if (suitBid !== null) {
     return {
       seat,
-      kind: kindForCount(jokerBid.joker === 'big' ? 'big-joker' : 'small-joker', cards.length),
+      kind: cards.length === 1 ? 'suit-single' : 'suit-pair',
+      suit: suitBid.suit,
+      cards,
+    };
+  }
+
+  const jokerBid = sameJokers(cards);
+  if (jokerBid !== null && cards.length === 2) {
+    return {
+      seat,
+      kind: jokerBid.joker === 'big' ? 'big-joker-pair' : 'small-joker-pair',
       suit: null,
       cards,
     };
@@ -56,10 +62,12 @@ export function detectBid(cards: Card[], level: Rank, seat: number): Bid | null 
   return null;
 }
 
-// 反主：强度必须严格更高。张数优先；同张数下 花色级牌 < 小王 < 大王。
+// 反主只能用对子。任何合法对子都能反单张；对子之间按固定强度严格递增。
 export function bidBeats(candidate: Bid, current: Bid | null): boolean {
   if (current === null) return true;
-  return bidStrength(candidate) > bidStrength(current);
+  if (!isPairBid(candidate)) return false;
+  if (!isPairBid(current)) return true;
+  return pairBidStrength(candidate) > pairBidStrength(current);
 }
 
 // 王亮牌 → 无主局
@@ -69,20 +77,30 @@ export function trumpSuitOfBid(bid: Bid): Suit | null {
 
 export type BidOption = { kind: BidKind; suit: Suit | null; cards: Card[] };
 
-// 手牌中能压过当前叫主的全部选项：每花色取最强（对优于单），王对为无主
-export function availableBids(hand: Card[], level: Rank, current: Bid | null): BidOption[] {
+// 手牌中的合法亮主/反主选项。已有亮牌或 counterOnly 时只返回能反主的对子。
+export function availableBids(
+  hand: Card[],
+  level: Rank,
+  current: Bid | null,
+  opts: { counterOnly?: boolean } = {},
+): BidOption[] {
   const options: BidOption[] = [];
+  const counterOnly = opts.counterOnly === true || current !== null;
   for (const suit of ['S', 'H', 'D', 'C'] as Suit[]) {
     const levels = hand.filter((c) => c.kind === 'suit' && c.suit === suit && c.rank === level);
-    if (levels.length > 0) options.push({ kind: kindForCount('suit', levels.length), suit, cards: levels });
+    if (levels.length >= 2) {
+      options.push({ kind: 'suit-pair', suit, cards: levels.slice(0, 2) });
+    } else if (levels.length === 1 && !counterOnly) {
+      options.push({ kind: 'suit-single', suit, cards: levels });
+    }
   }
   for (const j of ['small', 'big'] as const) {
     const jokers = hand.filter((c) => c.kind === 'joker' && c.joker === j);
-    if (jokers.length > 0) {
+    if (jokers.length >= 2) {
       options.push({
-        kind: kindForCount(j === 'big' ? 'big-joker' : 'small-joker', jokers.length),
+        kind: j === 'big' ? 'big-joker-pair' : 'small-joker-pair',
         suit: null,
-        cards: jokers,
+        cards: jokers.slice(0, 2),
       });
     }
   }

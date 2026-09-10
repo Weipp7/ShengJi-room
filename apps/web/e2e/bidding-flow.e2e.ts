@@ -34,20 +34,21 @@ test('two browser contexts observe a deterministic reveal and counter flow', asy
   await expect(host.getByRole('button', { name: '开始游戏' })).toBeEnabled();
   await host.getByRole('button', { name: '开始游戏' }).click();
 
-  await expect(host.locator('body')).toContainText('叫主');
-  await expect(guest.locator('body')).toContainText('叫主');
+  await expect(host.locator('body')).toContainText(/抢庄|亮主/);
+  await expect(guest.locator('body')).toContainText(/抢庄|亮主/);
   await expect(host.locator('body')).toContainText(roomCode!);
   await expect(guest.locator('body')).toContainText(roomCode!);
 
   await host.getByRole('button', { name: '♣' }).click();
-  await expect(host.locator('body')).toContainText('你 亮主');
-  await expect(guest.locator('body')).toContainText('E2E甲 亮主');
+  // 慢速渐进发牌下，真人可能在机器人首次亮主前先抢庄，也可能是在已有亮主后反主。
+  await expect(host.locator('body')).toContainText(/你 (抢庄|反主)/);
+  await expect(guest.locator('body')).toContainText(/E2E甲 (抢庄|反主)/);
 
   await guest.locator('button.bid-nt.lit').click();
   await expect(host.locator('body')).toContainText('反主');
   await expect(guest.locator('body')).toContainText('反主');
-  await expect(host.locator('body')).toContainText('小王单张');
-  await expect(guest.locator('body')).toContainText('小王单张');
+  await expect(host.locator('body')).toContainText(/[大小]王一对/);
+  await expect(guest.locator('body')).toContainText(/[大小]王一对/);
   await expect(host.locator('.contract-facts')).toContainText('主');
   await expect(host.locator('.contract-facts')).toContainText('队伍级牌');
   await expect(host.locator('.contract-facts')).toContainText('庄');
@@ -55,7 +56,7 @@ test('two browser contexts observe a deterministic reveal and counter flow', asy
   await guest.reload();
   await expect(guest.locator('body')).toContainText(roomCode!);
   await expect(guest.locator('body')).toContainText('反主');
-  await expect(guest.locator('body')).toContainText('小王单张');
+  await expect(guest.locator('body')).toContainText(/[大小]王一对/);
   await expect(guest.locator('body')).toContainText('E2E乙');
 
   await host.screenshot({ path: `${artifactDir}/two-context-counter-host.png`, fullPage: true });
@@ -66,13 +67,13 @@ test('two browser contexts observe a deterministic reveal and counter flow', asy
   await setNickname(compact, 'E2E丙');
   await compact.getByPlaceholder('房间码').fill(roomCode!);
   await compact.getByRole('button', { name: '加入' }).last().click();
-  await expect(compact.locator('body')).toContainText('小王单张');
+  await expect(compact.locator('body')).toContainText(/[大小]王一对/);
   await expect(compact.locator('body')).toContainText('反主');
   await expect(compact.locator('.contract-facts')).toContainText('主');
   await expect(compact.locator('.contract-facts')).toContainText('无主');
   await expect(compact.locator('.contract-facts')).toContainText('队伍级牌');
   await expect(compact.locator('.contract-facts')).toContainText('庄');
-  await expect(compact.locator('.contract-cards .card-face')).toHaveCount(1);
+  await expect(compact.locator('.contract-cards .card-face')).toHaveCount(2);
   const overflow = await compact.evaluate(() => {
     const actionBar = document.querySelector('.action-bar');
     const statusBar = document.querySelector('.status-bar');

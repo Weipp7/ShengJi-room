@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import type { Card, TrumpContext } from '@shengji/shared';
+import type { Card, Combo, TrumpContext } from '@shengji/shared';
 import { detectCombo } from '../src/combo';
+import { evaluateThrowLead, matchThrowCombo } from '../src/throw';
 import { trickWinner, type TrickPlay } from '../src/trick';
 import { c, joker } from './helpers';
 
@@ -8,6 +9,16 @@ const trump: TrumpContext = { trumpSuit: 'H', level: 2 };
 
 function play(seat: number, cards: Card[], ctx: TrumpContext = trump): TrickPlay {
   return { seat, cards, combo: detectCombo(cards, ctx) };
+}
+
+function throwLead(cards: Card[]): Combo {
+  const result = evaluateThrowLead({ seat: 0, cards, hand: cards, hands: [cards, [], [], []], trump });
+  if (result.type !== 'success') throw new Error('test helper requires a successful throw');
+  return result.combo;
+}
+
+function throwPlay(seat: number, cards: Card[], lead: Combo): TrickPlay {
+  return { seat, cards, combo: matchThrowCombo(cards, lead, trump) };
 }
 
 describe('trickWinner', () => {
@@ -81,5 +92,60 @@ describe('trickWinner', () => {
       play(3, [c('C', 4, 0)], nt),
     ];
     expect(trickWinner(plays, nt)).toBe(0);
+  });
+
+  it('all-trump matching responses to an all-single throw compare their largest single', () => {
+    const lead = throwLead([c('S', 14, 0), c('S', 13, 0), c('S', 12, 0)]);
+    const plays: TrickPlay[] = [
+      { seat: 0, cards: lead.cards, combo: lead },
+      throwPlay(1, [c('H', 3, 0), c('H', 4, 0), c('H', 7, 0)], lead),
+      throwPlay(2, [c('H', 5, 0), c('H', 6, 0), c('H', 8, 0)], lead),
+      { seat: 3, cards: [c('D', 3, 0), c('C', 4, 0), c('D', 5, 0)], combo: null },
+    ];
+    expect(trickWinner(plays, trump)).toBe(2);
+  });
+
+  it('multiple pairs plus a single compares the largest pair, not the largest single', () => {
+    const lead = throwLead([
+      c('S', 14, 0), c('S', 14, 1),
+      c('S', 10, 0), c('S', 10, 1),
+      c('S', 13, 0),
+    ]);
+    const plays: TrickPlay[] = [
+      { seat: 0, cards: lead.cards, combo: lead },
+      throwPlay(1, [
+        c('H', 3, 0), c('H', 3, 1),
+        c('H', 8, 0), c('H', 8, 1),
+        c('H', 14, 0),
+      ], lead),
+      throwPlay(2, [
+        c('H', 4, 0), c('H', 4, 1),
+        c('H', 9, 0), c('H', 9, 1),
+        c('H', 5, 0),
+      ], lead),
+      { seat: 3, cards: [], combo: null },
+    ];
+    expect(trickWinner(plays, trump)).toBe(2);
+  });
+
+  it('tractor plus other shapes compares only the strongest tractor', () => {
+    const lead = throwLead([
+      c('S', 13, 0), c('S', 13, 1),
+      c('S', 14, 0), c('S', 14, 1),
+      c('S', 9, 0), c('S', 9, 1),
+    ]);
+    const plays: TrickPlay[] = [
+      { seat: 0, cards: lead.cards, combo: lead },
+      throwPlay(1, [
+        c('H', 5, 0), c('H', 5, 1), c('H', 6, 0), c('H', 6, 1),
+        c('H', 14, 0), c('H', 14, 1),
+      ], lead),
+      throwPlay(2, [
+        c('H', 7, 0), c('H', 7, 1), c('H', 8, 0), c('H', 8, 1),
+        c('H', 3, 0), c('H', 3, 1),
+      ], lead),
+      { seat: 3, cards: [], combo: null },
+    ];
+    expect(trickWinner(plays, trump)).toBe(2);
   });
 });
